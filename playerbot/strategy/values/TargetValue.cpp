@@ -12,7 +12,7 @@ using namespace ai;
 
 Unit* TargetValue::FindTarget(FindTargetStrategy* strategy)
 {
-    std::list<ObjectGuid> attackers = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("possible attack targets")->Get();
+    std::list<ObjectGuid> attackers = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("attackers")->Get();
     for (std::list<ObjectGuid>::iterator i = attackers.begin(); i != attackers.end(); ++i)
     {
         Unit* unit = ai->GetUnit(*i);
@@ -35,7 +35,7 @@ bool FindNonCcTargetStrategy::IsCcTarget(Unit* attacker)
         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
         {
             Player *player = sObjectMgr.GetPlayer(itr->guid);
-            if (!player || !sServerFacade.IsAlive(player) || ai->IsSafe(player))
+            if (!player || !sServerFacade.IsAlive(player) || !ai->IsSafe(player))
                 continue;
 
             if (player->GetPlayerbotAI())
@@ -101,11 +101,14 @@ TravelTarget* LeaderTravelTargetValue::Calculate()
     TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
 
     Player* player = ai->GetGroupMaster();
-    if (!player || player == bot || !player->GetPlayerbotAI())
+    if (!player || player == bot || !player->GetPlayerbotAI() || !ai->IsSafe(player))
         return target;
 
     if (bot->GetGroup() && !ai->IsGroupLeader())
-        if (!ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) && !ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) && !ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT))
+        if (!(ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+            ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)) &&
+            !ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) &&
+            !ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT))
             return target;
 
      TravelTarget* leaderTarget = PAI_VALUE(TravelTarget*, "travel target");
@@ -220,4 +223,55 @@ std::list<ObjectGuid> FriendlyManualTargetsValue::Get()
 std::list<ObjectGuid> FriendlyManualTargetsValue::LazyGet()
 {
     return Get();
+}
+
+GuidPosition ClosestEntryValue::Calculate()
+{
+    // Implement the logic to calculate the closest entry target
+    WorldPosition botPos(bot);
+
+    if (!Qualified::isValidNumberString(qualifier))
+        return GuidPosition();
+
+    int32 entry = stoi(qualifier);
+
+    if (entry > 0)
+    {
+        std::vector<CreatureDataPair const*> creatures = botPos.getCreaturesNear(0.0f, entry);
+
+        float minDistance = std::numeric_limits<float>::max();
+        GuidPosition closestTarget;
+
+        for (auto& creature : creatures)
+        {
+            GuidPosition target(creature);
+            float distance = botPos.sqDistance2d(target);
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                closestTarget = target;
+            }
+        }
+
+        return closestTarget;
+    }
+    else
+    {
+        std::vector<GameObjectDataPair const*> gameObjects = botPos.getGameObjectsNear(0.0f, -entry);
+        float minDistance = std::numeric_limits<float>::max();
+        GuidPosition closestTarget;
+        for (auto& gameObject : gameObjects)
+        {
+            GuidPosition target(gameObject);
+            float distance = botPos.sqDistance2d(target);
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                closestTarget = target;
+            }
+        }
+        return closestTarget;
+    }
+
+    return GuidPosition();
 }

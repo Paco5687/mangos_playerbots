@@ -10,7 +10,7 @@ namespace ai
         RpgActionMultiplier(PlayerbotAI* ai) : Multiplier(ai, "rpg action") {}
 
     public:
-        virtual float GetValue(Action* action);
+        virtual float GetValue(Action* action) override;
     };
 
     class RpgStrategy : public Strategy
@@ -114,8 +114,27 @@ namespace ai
 #ifdef GenerateBotHelp
         virtual std::string GetHelpName() { return "rpg guild"; } //Must equal iternal name
         virtual std::string GetHelpDescription() {
-            return "This strategy makes bot move to guild master npcs.\n"
-                "Bots will automatically buy a petition if they are not already in a guild.";
+            return "This strategy makes bot move to guild master npcs and guild banks.\n"
+                "Bots will automatically buy a petition if they are not already in a guild.\n"
+                "Bots will deposit surplus items to guild bank and withdraw useful items.";
+        }
+        virtual std::vector<std::string> GetRelatedStrategies() { return { "rpg" }; }
+#endif
+    private:
+        virtual void InitNonCombatTriggers(std::list<TriggerNode*>& triggers) override;
+    };
+
+    class RpgBankStrategy : public Strategy
+    {
+    public:
+        RpgBankStrategy(PlayerbotAI* ai) : Strategy(ai) {};
+        std::string getName() override { return "rpg bank"; }
+#ifdef GenerateBotHelp
+        virtual std::string GetHelpName() { return "rpg bank"; }
+        virtual std::string GetHelpDescription() {
+            return "This strategy makes bot move to bankers.\n"
+                "Bots will deposit items they can use later (higher level equip, crafting materials).\n"
+                "Bots will withdraw items when they become useful (level requirement met, crafting ready).";
         }
         virtual std::vector<std::string> GetRelatedStrategies() { return { "rpg" }; }
 #endif

@@ -53,7 +53,7 @@ namespace ai
                     chaseDist = (chaseDist - sPlayerbotAIConfig.contactDistance);
                 }
 
-                if (MoveStyleValue::WaitForEnemy(ai) && target->m_movementInfo.HasMovementFlag(movementFlagsMask) &&
+                if (MoveStyleValue::WaitForEnemy(ai) && !AI_VALUE(Unit*, "rti cc target") && target->m_movementInfo.HasMovementFlag(movementFlagsMask) &&
                         sServerFacade.IsInFront(target, bot, sPlayerbotAIConfig.sightDistance, CAST_ANGLE_IN_FRONT) &&
                         sServerFacade.IsDistanceGreaterThan(distanceToTarget, sPlayerbotAIConfig.tooCloseDistance))
                 {
@@ -199,5 +199,50 @@ namespace ai
     public:
         ReachPartyMemberToHealAction(PlayerbotAI* ai) : ReachTargetAction(ai, "reach party member to heal", ai->GetRange("heal")) {}
         virtual std::string GetTargetName() override { return "party member to heal"; }
+    };
+
+    class ReachPartyMemberForTotemAction : public ReachTargetAction
+    {
+    public:
+        ReachPartyMemberForTotemAction(PlayerbotAI* ai)
+            : ReachTargetAction(ai, "reach party member for totem", 20.0f) {}
+
+        void Qualify(const std::string& qualifier) override
+        {
+            ReachTargetAction::Qualify(qualifier);
+            range = 20.0f;
+        }
+
+        Unit* GetTarget() override
+        {
+            std::string totemSpell = spellName;
+            if (totemSpell.empty() && !qualifier.empty())
+                totemSpell = Qualified::getMultiQualifierStr(qualifier, 0, "::");
+
+            Group* group = bot->GetGroup();
+            if (!group || totemSpell.empty())
+                return AI_VALUE(Unit*, "master target");
+
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->getSource();
+                if (!member || !sServerFacade.IsAlive(member))
+                    continue;
+
+                if (member == bot)
+                    continue;
+
+                if (!member->IsInWorld() || member->GetMapId() != bot->GetMapId())
+                    continue;
+
+                if (!bot->IsWithinDistInMap(member, 100.0f, false))
+                    continue;
+
+                if (!bot->IsWithinDistInMap(member, range, false) || !AI_VALUE2(bool, "has totem", name))
+                    return member; 
+            }
+
+            return nullptr;
+        }
     };
 }

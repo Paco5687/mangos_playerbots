@@ -71,6 +71,7 @@ namespace ai
     {
     public:
         CastSoulstoneAction(PlayerbotAI* ai) : CastItemTargetAction(ai, "revive targets", true, true) {}
+        std::string GetTargetName() override { return "party member to soulstone"; }
 
     private:
         uint32 GetItemId() override 
@@ -389,6 +390,13 @@ namespace ai
         std::string GetTargetName() override { return "self target"; }
 	};
 
+        class CastCreateSoulstoneAction : public CastSpellAction
+        {
+        public:
+                CastCreateSoulstoneAction(PlayerbotAI* ai) : CastSpellAction(ai, "create soulstone") {}
+        std::string GetTargetName() override { return "self target"; }
+        };
+
 	class CastCreateFirestoneAction : public CastSpellAction
 	{
 	public:
@@ -473,8 +481,8 @@ namespace ai
     {
     public:
         CastLifeTapAction(PlayerbotAI* ai) : CastSpellAction(ai, "life tap") {}
-        virtual std::string GetTargetName() { return "self target"; }
-        virtual bool isUseful() { return AI_VALUE2(uint8, "health", "self target") > sPlayerbotAIConfig.lowHealth; }
+        virtual std::string GetTargetName() override { return "self target"; }
+        virtual bool isUseful() override { return AI_VALUE2(uint8, "health", "self target") > sPlayerbotAIConfig.lowHealth; }
     };
 
     class CastAmplifyCurseAction : public CastBuffSpellAction

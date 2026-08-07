@@ -174,6 +174,9 @@ uint32 CurrentMountSpeedValue::Calculate()
 {
     Unit* unit = AI_VALUE(Unit*, getQualifier());
 
+    if (!unit)
+        return 0;
+
     uint32 mountSpeed = 0;
 
     for (uint32 auraType = SPELL_AURA_BIND_SIGHT; auraType < TOTAL_AURAS; auraType++)
@@ -183,7 +186,7 @@ uint32 CurrentMountSpeedValue::Calculate()
         if (auras.empty())
             continue;
 
-        for (Unit::AuraList::const_iterator i = auras.begin(); i != auras.end(); i++)
+        for (Unit::AuraList::const_iterator i = auras.begin(); i != auras.end(); ++i)
         {
             Aura* aura = *i;
             if (!aura)
@@ -271,7 +274,7 @@ std::string MountListValue::Format()
     for (auto& mount : this->Calculate())
     {
         std::string speed = std::to_string(mount.GetSpeed(false) + 1) + "%" + (mount.GetSpeed(true) ? ("/" + (std::to_string(mount.GetSpeed(true) + 1) + "%")) : "");
-        out << (mount.IsItem() ? "(item)" : "(spell)") << chat->formatSpell(mount.GetSpellId()) << "(" << speed.c_str() << "),";
+        out << (mount.IsItem() ? "(item)" : "(spell)") << chat->formatSpell(mount.GetSpellId()) << "(" << speed << "),";
     }
     out << "}";
     return out.str();

@@ -9,7 +9,8 @@ using namespace ai;
 
 GuidPosition FreeMoveCenterValue::Calculate()
 {       
-    if (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+    if (ai->HasStrategy("follow", ai->GetState()) ||
+        ai->HasStrategy("wander", ai->GetState()))
     {
         Unit* followTarget = AI_VALUE(Unit*, "follow target");
 
@@ -18,7 +19,7 @@ GuidPosition FreeMoveCenterValue::Calculate()
 
         //Use bot as center when follow target is on a different map.
         if (followTarget->GetMapId() != bot->GetMapId()) 
-            return bot;
+            return followTarget;
 
         Player* player = dynamic_cast<Player*>(followTarget);
 
@@ -34,7 +35,7 @@ GuidPosition FreeMoveCenterValue::Calculate()
             return followTarget;
 
         //Move the location to a location around follow targets destination.
-        if (player && player->GetPlayerbotAI() && PAI_VALUE(WorldPosition, "last long move"))
+        if (player && player->GetPlayerbotAI() && ai->IsSafe(player) && PAI_VALUE(WorldPosition, "last long move"))
             loc += (PAI_VALUE(WorldPosition, "last long move") - player);
 
         return loc;
@@ -42,10 +43,10 @@ GuidPosition FreeMoveCenterValue::Calculate()
 
     PositionEntry pos;
 
-    if (ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) && (pos = AI_VALUE2(PositionEntry, "pos", "stay")).isSet())
+    if (ai->HasStrategy("stay", ai->GetState()) && (pos = AI_VALUE2(PositionEntry, "pos", "stay")).isSet())
         return GuidPosition(bot->GetObjectGuid(), pos.Get());
 
-    if (ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT) && (pos = AI_VALUE2(PositionEntry, "pos", "guard")).isSet())
+    if (ai->HasStrategy("guard", ai->GetState()) && (pos = AI_VALUE2(PositionEntry, "pos", "guard")).isSet())
         return GuidPosition(bot->GetObjectGuid(), pos.Get());
 
     return bot;
@@ -53,69 +54,74 @@ GuidPosition FreeMoveCenterValue::Calculate()
 
 float FreeMoveRangeValue::Calculate()
 {
-    if (ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT))
+    if (ai->HasStrategy("stay", ai->GetState()))
         return INTERACTION_DISTANCE;
+
+    if (AI_VALUE(Unit*, "rti cc target"))
+        return ai->GetRange("spell");
 
     Unit* followTarget = AI_VALUE(Unit*, "follow target");
 
     if (!followTarget || followTarget == bot)
         return 0;
 
-    if (bot->GetMap()->IsDungeon())
-        return INTERACTION_DISTANCE; 
-
-    if (!ai->HasActivePlayerMaster())
-    {
-        if (followTarget->IsInCombat())
-            return sPlayerbotAIConfig.reactDistance * 0.25f;
-
-        return sPlayerbotAIConfig.reactDistance * 0.75f;
-    }
-
-    //Increase distance as master is standing still.
-    float maxDist = INTERACTION_DISTANCE;
-
-    bool hasFollow = ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT);
-    bool hasGuard = ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT);
-    bool hasFree = !hasFollow && !hasGuard;
-
-    //When far away from master stop trying to limit the bot.
-    if (!hasFollow && (ai->HasStrategy("travel once", BotState::BOT_STATE_NON_COMBAT) || (WorldPosition(followTarget).fDist(bot) > (hasFree ? sPlayerbotAIConfig.sightDistance : sPlayerbotAIConfig.maxFreeMoveDistance))))
-        return 0;
-
-    if (hasFree || hasGuard)//Free and guard start with a base 20y range.
-        maxDist += sPlayerbotAIConfig.proximityDistance;
-
-    uint32 lastMasterMove = MEM_AI_VALUE(WorldPosition, "master position")->LastChangeDelay();
-
-    if (sPlayerbotAIConfig.freeMoveDelay && lastMasterMove > sPlayerbotAIConfig.freeMoveDelay) //After 30 seconds increase the range by 1y each second.
-        maxDist += (lastMasterMove - static_cast<uint32>(sPlayerbotAIConfig.freeMoveDelay));
-
-    if (maxDist > sPlayerbotAIConfig.maxFreeMoveDistance)
-    {
-        if (hasFree)
-        {
-            maxDist = 0;
-        }
-        else
-        {
-            maxDist = sPlayerbotAIConfig.maxFreeMoveDistance;
-        }
-    }
-
-    return maxDist;
+   if (ai->HasStrategy("wander", ai->GetState()))
+   {
+       return ai->GetRange("wandermax");
+   }
+   if (ai->HasStrategy("follow", ai->GetState()))
+   {
+       return ai->GetRange("follow");
+   }
+   if (ai->HasStrategy("guard", ai->GetState()))
+   {
+       return ai->GetRange("guard");
+   }
+    
+   return 0;
 }
 
-bool CanFreeMoveToValue::Calculate()
+bool CanFreeMoveValue::CanFreeMove(PlayerbotAI* ai, WorldPosition dest, float range)
 {
-    if (!GetRange())
+    if (!dest)
         return true;
 
-    GuidPosition destPos(qualifier);
+    if (!range)
+        return true;
 
-    destPos.updatePosition(bot->GetInstanceId());
+    AiObjectContext* context = ai->GetAiObjectContext();
 
-    GuidPosition refPos = AI_VALUE(GuidPosition, "free move center");
+    GuidPosition center = AI_VALUE(GuidPosition, "free move center");
+    return center.distance(dest) < range;
+}
 
-    return refPos.distance(destPos) < GetRange();
+bool CanFreeMoveValue::CanFreeMoveTo(PlayerbotAI* ai, WorldPosition dest)
+{
+    AiObjectContext* context = ai->GetAiObjectContext();
+    return CanFreeMove(ai, dest, AI_VALUE(float, "free move range"));
+}
+
+bool CanFreeMoveValue::CanFreeTarget(PlayerbotAI* ai, WorldPosition dest)
+{
+    AiObjectContext* context = ai->GetAiObjectContext();
+    float range = ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) ? std::min(ai->GetRange("spell"), AI_VALUE(float, "free move range")) : AI_VALUE(float, "free move range");
+
+    return CanFreeMove(ai, dest, range);
+}
+
+bool CanFreeMoveValue::CanFreeAttack(PlayerbotAI* ai, WorldPosition dest)
+{
+    return CanFreeMove(ai, dest, ai->GetRange("attack"));
+}
+
+bool CanFreeMoveValue::Calculate()
+{
+    float range = 0.0;
+
+    if (qualifier.empty())
+        range = AI_VALUE(float, "free move range");
+    else
+        range = ai->GetRange(qualifier);
+
+    return CanFreeMove(ai, bot, range);
 }

@@ -2,6 +2,8 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/PlayerbotHelpMgr.h"
+#include "playerbot/RandomPlayerbotMgr.h"
+#include "playerbot/PlayerbotMgr.h"
 
 
 #include "Database/DatabaseEnv.h"

@@ -82,6 +82,28 @@ void AvoidAoeStrategy::InitReactionMultipliers(std::list<Multiplier*>& multiplie
     InitCombatMultipliers(multipliers);
 }
 
+void AvoidSpecificCreaturesStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    triggers.push_back(new TriggerNode(
+        "specific creature too close",
+        NextAction::array(0, new NextAction("move away from specific creatures", ACTION_EMERGENCY + 5), NULL)));
+}
+
+void AvoidSpecificCreaturesStrategy::InitReactionTriggers(std::list<TriggerNode*>& triggers)
+{
+    InitCombatTriggers(triggers);
+}
+
+void AvoidSpecificCreaturesStrategy::InitCombatMultipliers(std::list<Multiplier*>& multipliers)
+{
+    multipliers.push_back(new AvoidSpecificCreaturesStrategyMultiplier(ai));
+}
+
+void AvoidSpecificCreaturesStrategy::InitReactionMultipliers(std::list<Multiplier*>& multipliers)
+{
+    InitCombatMultipliers(multipliers);
+}
+
 void WaitForAttackStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     triggers.push_back(new TriggerNode(
@@ -94,18 +116,24 @@ void WaitForAttackStrategy::InitCombatMultipliers(std::list<Multiplier*>& multip
     multipliers.push_back(new WaitForAttackMultiplier(ai));
 }
 
+WaitForAttackStrategy* WaitForAttackStrategy::Get(PlayerbotAI* ai)
+{
+    return ai ? ai->GetStrategy<WaitForAttackStrategy>("wait for attack", BotState::BOT_STATE_COMBAT) : nullptr;
+}
+
 bool WaitForAttackStrategy::ShouldWait(PlayerbotAI* ai)
 {
     // Only check if the bot has the strategy enabled
     if (ai->HasStrategy("wait for attack", BotState::BOT_STATE_COMBAT))
     {
         // Only check if bot is in a group with a real player
-        Player* player = ai->GetBot();
-        if (player->GetGroup() && ai->HasRealPlayerMaster())
+        Player* bot = ai->GetBot();
+        AiObjectContext* context = ai->GetAiObjectContext();
+        if (bot->GetGroup() && ai->HasRealPlayerMaster())
         {
             // Don't wait if the current target is an enemy player
             bool enemyPlayer = false;
-            Unit* target = ai->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
+            Unit* target = context->GetValue<Unit*>("current target")->Get();
             if (target)
             {
                 Player* player = dynamic_cast<Player*>(target);
@@ -118,7 +146,7 @@ bool WaitForAttackStrategy::ShouldWait(PlayerbotAI* ai)
             if (!enemyPlayer)
             {
                 // Check if bot is currently in combat
-                const time_t combatStartTime = PAI_VALUE(time_t, "combat start time");
+                const time_t combatStartTime = AI_VALUE(time_t, "combat start time");
                 if (combatStartTime > 0)
                 {
                     // Check the amount of time elapsed from the combat start
@@ -134,13 +162,13 @@ bool WaitForAttackStrategy::ShouldWait(PlayerbotAI* ai)
 
 uint8 WaitForAttackStrategy::GetWaitTime(PlayerbotAI* ai)
 {
-    Player* player = ai->GetBot();
-    return PAI_VALUE(uint8, "wait for attack time");
+    AiObjectContext* context = ai->GetAiObjectContext();
+    return AI_VALUE(uint8, "wait for attack time");
 }
 
 float WaitForAttackMultiplier::GetValue(Action* action)
 {
-    // Allow some movement and targeting actions
+    // Allow some movement and targeting actions and non threat actions (like cc!)
     const std::string& actionName = action->getName();
     if ((actionName != "wait for attack keep safe distance") && 
         (actionName != "dps assist") && 
@@ -149,7 +177,8 @@ float WaitForAttackMultiplier::GetValue(Action* action)
         (actionName != "pull rti target") &&
         (actionName != "pull start") &&
         (actionName != "pull action") &&
-        (actionName != "pull end"))
+        (actionName != "pull end") &&
+        (action->getThreatType() != ActionThreatType::ACTION_THREAT_NONE))
     {
         return WaitForAttackStrategy::ShouldWait(ai) ? 0.0f : 1.0f;
     }

@@ -116,9 +116,6 @@ void TalentSpec::ApplyTalents(Player* bot, std::ostringstream* out)
             if (!spellId)
                 continue;
 
-            if (spellId == 0)
-                continue;
-
             if (bot->HasSpell(spellId) && entry.rank - 1 != rank)
             {
                 bot->removeSpell(spellId, false, false);
@@ -170,9 +167,6 @@ void TalentSpec::GetTalents(uint32 classMask) {
         {
             uint32 spellId = talentInfo->RankID[rank];
             if (!spellId)
-                continue;
-
-            if (spellId == 0)
                 continue;
 
             entry.maxRank = rank + 1;
@@ -228,9 +222,6 @@ void TalentSpec::ReadTalents(Player* bot) {
             uint32 spellId = entry.talentInfo->RankID[rank];
 
             if (!spellId)
-                continue;
-
-            if (spellId == 0)
                 continue;
 
             if (bot->HasSpell(spellId))
@@ -369,10 +360,8 @@ int TalentSpec::highestTree()
     return 0;
 }
 
-std::string TalentSpec::formatSpec(Player* bot)
+std::string TalentSpec::formatSpec(uint8 cls)
 {
-    uint8 cls = bot->getClass();
-
     std::ostringstream out;
     //out << chathelper:: specs[cls][highestTree()] << " (";
 

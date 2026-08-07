@@ -32,6 +32,15 @@ public:
         char* source = (char*)str.c_str();
         return ExtractSpellIdFromLink(&source);
     }
+    uint32 extractCreatureId(std::string str)
+    {
+        char* source = (char*)str.c_str();
+        uint32 id;
+        if (ExtractUInt32(&source, id))
+            return id;
+            
+        return 0;
+    }
 };
 
 class ChannelAcces
@@ -281,6 +290,7 @@ enum class ActivePiorityType : uint8
     IS_REAL_PLAYER = 0,
     HAS_REAL_PLAYER_MASTER = 1,
     IN_GROUP_WITH_REAL_PLAYER,
+    IS_RUNNING_TEST,
     IN_BATTLEGROUND,
     IN_INSTANCE,
     VISIBLE_FOR_PLAYER,
@@ -291,6 +301,7 @@ enum class ActivePiorityType : uint8
     NEARBY_PLAYER,
     PLAYER_FRIEND,
     PLAYER_GUILD,
+    NO_PATH,
     IN_ACTIVE_AREA,
     IN_ACTIVE_MAP,
     IN_INACTIVE_MAP,
@@ -310,14 +321,6 @@ enum ActivityType
     REACT_ACTIVITY = 8,
     ALL_ACTIVITY = 9,
     MAX_ACTIVITY_TYPE
-};
-
-enum BotRoles
-{
-    BOT_ROLE_NONE = 0x00,
-    BOT_ROLE_TANK = 0x01,
-    BOT_ROLE_HEALER = 0x02,
-    BOT_ROLE_DPS = 0x04
 };
 
 class PacketHandlingHelper
@@ -371,9 +374,10 @@ public:
     void HandleCommands();
 private:
     void UpdateAIInternal(uint32 elapsed, bool minimal = false) override;
-
-public:
+public:    
     static std::string BotStateToString(BotState state);
+    std::string GetDefaultMovementStrategy();
+    void EnsureDefaultMovementStrategy(Player* requester = nullptr);
 	std::string HandleRemoteCommand(std::string command);
     void HandleCommand(uint32 type, const std::string& text, Player& fromPlayer, const uint32 lang = LANG_UNIVERSAL);
     void QueueChatResponse(uint32 msgType, ObjectGuid guid1, ObjectGuid guid2, std::string message, std::string chanName, std::string name, bool noDelay = false);
@@ -397,9 +401,10 @@ public:
     void ResetStrategies(bool autoLoad = true);
     void ReInitCurrentEngine();
     void Reset(bool full = false);
-    bool IsTank(Player* player, bool inGroup = true);
-    bool IsHeal(Player* player, bool inGroup = true);
+    static bool IsTank(Player* player, bool inGroup = true);
+    static bool IsHeal(Player* player, bool inGroup = true);
     bool IsRanged(Player* player, bool inGroup = true);
+    bool IsMelee(Player* player, bool inGroup = true);
     Creature* GetCreature(ObjectGuid guid) const;
     Creature* GetAnyTypeCreature(ObjectGuid guid) const;
     Unit* GetUnit(ObjectGuid guid);
@@ -543,7 +548,7 @@ public:
 
     static void SendDelayedPacket(WorldSession* session, std::future<std::vector<std::pair<WorldPacket, uint32>>> futurePacket);
     void ReceiveDelayedPacket(std::future<std::vector<std::pair<WorldPacket, uint32>>> futurePacket);
-public:
+ public:
     std::vector<Bag*> GetEquippedAnyBags();
     std::vector<Bag*> GetEquippedQuivers();
     std::vector<Item*> GetInventoryAndEquippedItems();
@@ -554,7 +559,7 @@ public:
     bool HasQuestItemsInLootList(LootItemList &questLootItemList);
     bool HasQuestItemsInWOLootList(WorldObject* wo);
     bool CanLootSomethingFromWO(WorldObject* wo);
-
+    PlayerbotHolder* GetHolder() const;
 private:
     void InventoryIterateItemsInBags(IterateItemsVisitor* visitor);
     void InventoryIterateItemsInEquip(IterateItemsVisitor* visitor);   
@@ -576,7 +581,7 @@ public:
     //Bot has a master that is a player.
     bool HasRealPlayerMaster() { return master && (!master->GetPlayerbotAI() || master->GetPlayerbotAI()->IsRealPlayer()); } 
     //Bot has a master that is actively playing.
-    bool HasActivePlayerMaster() { return master && !master->GetPlayerbotAI(); }
+    bool HasActivePlayerMaster() const { return master && !master->GetPlayerbotAI(); }
     //Checks if the bot is summoned as alt of a player
     bool IsAlt() { return HasRealPlayerMaster() && !sRandomPlayerbotMgr.IsRandomBot(bot); }
     //Get the group leader or the master of the bot.
@@ -584,9 +589,10 @@ public:
 
     bool IsGroupLeader() { return bot->GetGroup() && bot->GetGroup()->GetLeaderGuid() == bot->GetObjectGuid(); }
 
-    //Check if player is safe to use.
-    bool IsSafe(Player* player) { return player && player->GetMapId() == bot->GetMapId() && player->GetInstanceId() == bot->GetInstanceId() && !player->IsBeingTeleported(); }
-    bool IsSafe(WorldObject* obj) { return obj && obj->GetMapId() == bot->GetMapId() && obj->GetInstanceId() == bot->GetInstanceId() && (!obj->IsPlayer() || !((Player*)obj)->IsBeingTeleported()); }
+    //Check if player is safe to use.    
+    static bool IsSafe(Player* player, WorldObject* obj) {return obj && obj->GetMapId() == player->GetMapId() && obj->GetInstanceId() == player->GetInstanceId() && (!obj->IsPlayer() || !((Player*)obj)->IsBeingTeleported() || !((Player*)obj)->GetSession()->GetPlayer()); }
+    bool IsSafe(WorldObject* obj) { return IsSafe(bot, obj); }
+    bool IsSafe(Player* player) { return IsSafe(bot, player); }
 
     //Returns a semi-random (cycling) number that is fixed for each bot.
     uint32 GetFixedBotNumber(BotTypeNumber typeNumber, uint32 maxNum = 100, float cyclePerMin = 1, bool ignoreGuid = false); 
@@ -672,6 +678,9 @@ public:
     bool HandleSpellClick(uint32 entry);
     bool HandleSpellClick(ObjectGuid guid);
 
+    void SetLastEvent(Event& event) { lastEvent = event; }
+    Event& GetLastEvent() { return lastEvent; }
+
 #ifdef BUILD_ELUNA
     MaNGOS::unique_weak_ptr<PlayerbotAI> GetWeakPtr() const { return m_weakRef; }
     void SetWeakPtr(MaNGOS::unique_weak_ptr<PlayerbotAI> weakRef) { m_weakRef = std::move(weakRef); }
@@ -693,6 +702,7 @@ protected:
     ChatHelper chatHelper;
     std::queue<ChatCommandHolder> chatCommands;
     std::queue<ChatQueuedReply> chatReplies;
+    std::mutex chatRepliesMutex;
     PacketHandlingHelper botOutgoingPacketHandlers;
     PacketHandlingHelper masterIncomingPacketHandlers;
     PacketHandlingHelper masterOutgoingPacketHandlers;
@@ -714,6 +724,17 @@ protected:
     bool isPlayerFriend = false;
     bool isMovingToTransport = false;
     bool shouldLogOut = false;
+    bool m_recordMessages = false;
+    bool m_recordIncommingMessages = false;
+    std::vector<std::string> m_recordedMessages;
+    Event lastEvent;
+
+public:
+    void RecordMessages(bool record, bool incomming = false) { m_recordMessages = record; m_recordIncommingMessages = incomming; if (!record) m_recordedMessages.clear(); }
+    bool IsRecordingMessages() const { return m_recordMessages; }
+    bool IsRecordingIncommingMessages() const { return m_recordIncommingMessages; }
+    std::vector<std::string> GetRecordedMessages() { m_recordMessages = false; m_recordIncommingMessages= false; auto msgs = m_recordedMessages; m_recordedMessages.clear(); return msgs; }
+    void ClearRecordedMessages() { m_recordedMessages.clear(); m_recordMessages = false; m_recordIncommingMessages = false;}
 
 #ifdef BUILD_ELUNA
     MaNGOS::unique_weak_ptr<PlayerbotAI> m_weakRef;

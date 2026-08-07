@@ -2,8 +2,35 @@
 #include "playerbot/playerbot.h"
 #include "BankAction.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 
 using namespace ai;
+
+namespace
+{
+    void ResetBankActionItemCaches(PlayerbotAI* ai, const std::string& itemId, const std::string& itemQualifier,
+        const std::string& usageQualifier = "")
+    {
+        if (!ai || itemId.empty() || itemQualifier.empty())
+            return;
+
+        AiObjectContext* context = ai->GetAiObjectContext();
+        if (!context)
+            return;
+
+        RESET_AI_VALUE(uint8,"bag space");
+        RESET_AI_VALUE2(uint32,"item count", itemId);
+        RESET_AI_VALUE2(uint32,"bank item count", itemId);
+        RESET_AI_VALUE2(ItemUsage,"item usage", itemQualifier);
+        RESET_AI_VALUE2(std::list<Item*>, "inventory items", itemQualifier);
+
+        if (!usageQualifier.empty())
+        {
+            RESET_AI_VALUE2(uint32,"item count", usageQualifier);
+            RESET_AI_VALUE2(std::list<Item*>, "inventory items", usageQualifier);
+        }
+    }
+}
 
 bool BankAction::Execute(Event& event)
 {
@@ -67,8 +94,20 @@ bool BankAction::Withdraw(Player* requester, const uint32 itemid)
     if (!pItem)
         return false;
 
+    const ItemPrototype* proto = pItem->GetProto();
+    if (!proto)
+        return false;
+
+    const std::string itemId = std::to_string(proto->ItemId);
+    const std::string itemQualifier = ItemQualifier(pItem).GetQualifier();
+    const std::string itemText = chat->formatItem(pItem, pItem->GetCount());
+
+    ResetBankActionItemCaches(ai, itemId, itemQualifier);
+
     ItemPosCountVec dest;
-    InventoryResult msg = bot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, false);
+    uint8 bagSlot;
+    InventoryResult msg = bot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, bagSlot, false);
+
     if (msg != EQUIP_ERR_OK)
     {
         bot->SendEquipError(msg, pItem, NULL);
@@ -77,9 +116,10 @@ bool BankAction::Withdraw(Player* requester, const uint32 itemid)
 
     bot->RemoveItem(pItem->GetBagSlot(), pItem->GetSlot(), true);
     bot->StoreItem(dest, pItem, true);
+    ResetBankActionItemCaches(ai, itemId, itemQualifier);
 
     std::ostringstream out;
-    out << "got " << chat->formatItem(pItem, pItem->GetCount()) << " from bank";
+    out << "got " << itemText << " from bank";
     ai->TellPlayer(requester, out.str());
     return true;
 }
@@ -88,8 +128,20 @@ bool BankAction::Deposit(Player* requester, Item* pItem)
 {
     std::ostringstream out;
 
+    const ItemPrototype* proto = pItem ? pItem->GetProto() : nullptr;
+    if (!proto)
+        return false;
+
+    const std::string itemId = std::to_string(proto->ItemId);
+    const std::string itemQualifier = ItemQualifier(pItem).GetQualifier();
+    const std::string itemText = chat->formatItem(pItem, pItem->GetCount());
+
+    ResetBankActionItemCaches(ai, itemId, itemQualifier);
+
     ItemPosCountVec dest;
-    InventoryResult msg = bot->CanBankItem(NULL_BAG, NULL_SLOT, dest, pItem, false);
+    uint8 bagSlot;
+    InventoryResult msg = bot->CanBankItem(NULL_BAG, NULL_SLOT, dest, pItem, false, bagSlot);
+
     if (msg != EQUIP_ERR_OK)
     {
         bot->SendEquipError(msg, pItem, NULL);
@@ -98,8 +150,9 @@ bool BankAction::Deposit(Player* requester, Item* pItem)
 
     bot->RemoveItem(pItem->GetBagSlot(), pItem->GetSlot(), true);
     bot->BankItem(dest, pItem, true);
+    ResetBankActionItemCaches(ai, itemId, itemQualifier);
 
-    out << "put " << chat->formatItem(pItem, pItem->GetCount()) << " to bank";
+    out << "put " << itemText << " to bank";
     ai->TellPlayer(requester, out.str());
 	return true;
 }
@@ -184,4 +237,91 @@ Item* BankAction::FindItemInBank(uint32 ItemId)
     }
 
     return NULL;
+}
+
+bool BankAction::AutoDeposit()
+{
+    bool deposited = false;
+
+    std::string itemusageQualifier = "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_BANK);
+
+    std::list<Item*> items = AI_VALUE2(std::list<Item*>, "inventory items", itemusageQualifier);
+    for (auto item : items)
+    {
+        if (!item)
+            continue;
+
+        const ItemPrototype* proto = item->GetProto();
+        if (!proto)
+            continue;
+
+        const std::string itemId = std::to_string(proto->ItemId);
+        const std::string itemQualifier = ItemQualifier(item).GetQualifier();
+
+        // Don't bank items needed for guild orders
+        ItemQualifier qualifier(item);
+        std::string qualStr = qualifier.GetQualifier();
+        ItemUsage currentUsage = AI_VALUE2(ItemUsage, "item usage", qualStr);
+        if (currentUsage == ItemUsage::ITEM_USAGE_GUILD_TASK)
+            continue;
+
+        ItemPosCountVec dest;
+        uint8 bagSlot;
+        InventoryResult msg = bot->CanBankItem(NULL_BAG, NULL_SLOT, dest, item, false, bagSlot);
+
+        if (msg != EQUIP_ERR_OK)
+            continue;
+
+        bot->RemoveItem(item->GetBagSlot(), item->GetSlot(), true);
+        bot->BankItem(dest, item, true);
+        ResetBankActionItemCaches(ai, itemId, itemQualifier, itemusageQualifier);
+        deposited = true;
+    }
+
+    return deposited;
+}
+
+bool BankAction::AutoWithdraw()
+{
+    bool withdrew = false;
+
+    if (AI_VALUE(uint8, "bag space") > 80)
+        return false;
+
+    auto checkAndWithdraw = [&](Item* pItem) -> bool
+    {
+        if (!pItem)
+            return false;
+
+        ItemPrototype const* proto = pItem->GetProto();
+        if (!proto)
+            return false;
+
+        const std::string itemId = std::to_string(proto->ItemId);
+        const std::string itemQualifier = ItemQualifier(pItem).GetQualifier();
+
+        ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", itemId);
+        if (usage == ItemUsage::ITEM_USAGE_BANK)
+            return false;        
+
+        ItemPosCountVec dest;
+        uint8 bagSlot;
+        InventoryResult msg = bot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, bagSlot, false);
+
+        if (msg != EQUIP_ERR_OK)
+            return false;
+
+        bot->RemoveItem(pItem->GetBagSlot(), pItem->GetSlot(), true);
+        bot->StoreItem(dest, pItem, true);
+        ResetBankActionItemCaches(ai, itemId, itemQualifier);
+        return true;
+    };
+
+    for (auto& item : AI_VALUE2(std::list<Item*>, "bank items", "all"))
+    {
+        if (checkAndWithdraw(item))
+            withdrew = true;
+    }    
+
+    return withdrew;
 }

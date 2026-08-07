@@ -4,7 +4,9 @@
 #include "ChooseRpgTargetAction.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/LootObjectStack.h"
 #include "playerbot/strategy/values/PossibleRpgTargetsValue.h"
+#include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/TravelMgr.h"
 
 using namespace ai;
@@ -30,7 +32,7 @@ bool MoveToRpgTargetAction::Execute(Event& event)
     {
         Player* player = guidP.GetPlayer();
 
-        if (player && player->GetPlayerbotAI())
+        if (player && ai->IsSafe(player) && player->GetPlayerbotAI())
         {
             GuidPosition guidPP = PAI_VALUE(GuidPosition, "rpg target");
 
@@ -62,7 +64,7 @@ bool MoveToRpgTargetAction::Execute(Event& event)
         return false;
     }
 
-    if (!AI_VALUE2(bool, "can free move to", GuidPosition(wo).to_string()))
+    if (!CanFreeMoveValue::CanFreeMoveTo(ai, wo))
     {
         AI_VALUE(std::set<ObjectGuid>&, "ignore rpg target").insert(AI_VALUE(GuidPosition, "rpg target"));
 
@@ -248,6 +250,13 @@ bool MoveToRpgTargetAction::isUseful()
 
     if (!AI_VALUE(bool, "can move around"))
         return false;
+
+    if (AI_VALUE(bool, "has available loot"))
+    {
+        LootObject lootObject = AI_VALUE(LootObjectStack*, "available loot")->GetLoot(sPlayerbotAIConfig.lootDistance);
+        if (lootObject.IsLootPossible(bot))
+            return false;
+    }
 
     return true;
 }

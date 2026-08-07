@@ -10,6 +10,7 @@
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/strategy/values/TravelValues.h"
+#include "playerbot/strategy/values/FreeMoveValues.h"
 #include <iomanip>
 
 using namespace ai;
@@ -26,6 +27,9 @@ bool ChooseRpgTargetAction::HasSameTarget(ObjectGuid guid, uint32 max, std::list
         Player* player = sObjectMgr.GetPlayer(i);
 
         if (!player)
+            continue;
+
+        if (!ai->IsSafe(player))
             continue;
 
         PlayerbotAI* ai = player->GetPlayerbotAI();
@@ -130,9 +134,6 @@ std::unordered_map<ObjectGuid, float> ChooseRpgTargetAction::GetTargets(Player* 
 
     std::shuffle(targetList.begin(), targetList.end(), *GetRandomGenerator());
 
-    //We are going to create a number of 'can free move::objectGuid' values. We remove some old ones here to clean up memory.
-    context->ClearExpiredValues("can free move", 10); //Clean up old free move to.
-
     //Only check up to 50 targets. Selfbots and bots with a real master can check more.
     uint16 checked = 0, sametarget = 0, maxCheck = 50;
     if (ai->HasRealPlayerMaster())
@@ -155,7 +156,7 @@ std::unordered_map<ObjectGuid, float> ChooseRpgTargetAction::GetTargets(Player* 
 
         //Check if we are allowed to move to this position. This is based on movement strategies follow, free, guard, stay. Bots are limited to finding targets near the center of those movement strategies.
         //For bots with real players they are also slightly limited in range unless the player stands still for a while. See free move values.
-        if (guidP.GetWorldObject(bot->GetInstanceId()) && !AI_VALUE2(bool, "can free move to", guidP.to_string()))
+        if (guidP.GetWorldObject(bot->GetInstanceId()) && !CanFreeMoveValue::CanFreeMoveTo(ai, guidP))
             SkipRpgTarget("Can not free move to.");
 
         if (guidP.IsGameObject())
@@ -182,6 +183,9 @@ std::unordered_map<ObjectGuid, float> ChooseRpgTargetAction::GetTargets(Player* 
             //Ignore yourself.
             if (player == bot)
                 SkipRpgTarget("Player is bot.");
+
+            if (!ai->IsSafe(player))
+                SkipRpgTarget("Player is not safe.");
 
             if (player->GetPlayerbotAI())
             {
@@ -317,6 +321,11 @@ float ChooseRpgTargetAction::getMaxRelevance(GuidPosition guidP)
 
                     if (dynamic_cast<RpgEnabled*>(action))
                         isRpg = true;
+
+                    RpgSubAction* subAction = dynamic_cast<RpgSubAction*>(action);
+
+                    if (subAction)
+                        rgpActionReason[guidP] = subAction->GetRpgActionName();
                 }
                 NextAction::destroy(nextActions);
 
@@ -324,7 +333,8 @@ float ChooseRpgTargetAction::getMaxRelevance(GuidPosition guidP)
                 if (isRpg)
                 {
                     maxRelevance = triggerNode->getFirstRelevance();
-                    rgpActionReason[guidP] = triggerNode->getName();
+                    if (rgpActionReason[guidP].empty())
+                        rgpActionReason[guidP] = triggerNode->getName();
                 }
             }
         }

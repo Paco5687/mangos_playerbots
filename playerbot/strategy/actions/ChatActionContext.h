@@ -60,11 +60,13 @@
 #include "SendMailAction.h"
 #include "ShareQuestAction.h"
 #include "SkipSpellsListAction.h"
+#include "AvoidCreatureListAction.h"
 #include "CustomStrategyEditAction.h"
 #include "FlagAction.h"
 #include "HireAction.h"
 #include "RangeAction.h"
 #include "SetCraftAction.h"
+#include "GuildCraftOrderAction.h"
 #include "WtsAction.h"
 #include "PassLeadershipToMasterAction.h"
 #include "CheatAction.h"
@@ -103,6 +105,7 @@ namespace ai
             creators["query item usage"] = [](PlayerbotAI* ai) { return new QueryItemUsageAction(ai); };
             creators["ll"] = [](PlayerbotAI* ai) { return new LootStrategyAction(ai); };
             creators["ss"] = [](PlayerbotAI* ai) { return new SkipSpellsListAction(ai); };
+            creators["avoid creature"] = [](PlayerbotAI* ai) { return new AvoidCreatureListAction(ai); };
             creators["loot"] = [](PlayerbotAI* ai) { return new AddAllLootAction(ai); };
             creators["add all loot"] = [](PlayerbotAI* ai) { return new AddAllLootAction(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
@@ -150,6 +153,7 @@ namespace ai
             creators["stay chat shortcut"] = [](PlayerbotAI* ai) { return new StayChatShortcutAction(ai); };
             creators["guard chat shortcut"] = [](PlayerbotAI* ai) { return new GuardChatShortcutAction(ai); };
             creators["free chat shortcut"] = [](PlayerbotAI* ai) { return new FreeChatShortcutAction(ai); };
+            creators["wander chat shortcut"] = [](PlayerbotAI* ai) { return new WanderChatShortcutAction(ai); };
             creators["flee chat shortcut"] = [](PlayerbotAI* ai) { return new FleeChatShortcutAction(ai); };
             creators["runaway chat shortcut"] = [](PlayerbotAI* ai) { return new GoawayChatShortcutAction(ai); };
             creators["grind chat shortcut"] = [](PlayerbotAI* ai) { return new GrindChatShortcutAction(ai); };
@@ -167,6 +171,7 @@ namespace ai
             creators["tell target"] = [](PlayerbotAI* ai) { return new TellTargetAction(ai); };
             creators["summon"] = [](PlayerbotAI* ai) { return new SummonAction(ai); };
             creators["who"] = [](PlayerbotAI* ai) { return new WhoAction(ai); };
+            creators["where"] = [](PlayerbotAI* ai) { return new GoAction(ai, "where"); };
             creators["save mana"] = [](PlayerbotAI* ai) { return new SaveManaAction(ai); };
             creators["max dps chat shortcut"] = [](PlayerbotAI* ai) { return new MaxDpsChatShortcutAction(ai); };
             creators["tell possible attack targets"] = [](PlayerbotAI* ai) { return new TellPossibleAttackTargetsAction(ai); };
@@ -182,6 +187,7 @@ namespace ai
             creators["wts"] = [](PlayerbotAI* ai) { return new WtsAction(ai); };
             creators["hire"] = [](PlayerbotAI* ai) { return new HireAction(ai); };
             creators["craft"] = [](PlayerbotAI* ai) { return new SetCraftAction(ai); };
+            creators["guild craft order"] = [](PlayerbotAI* ai) { return new GuildCraftOrderAction(ai); };
             creators["flag"] = [](PlayerbotAI* ai) { return new FlagAction(ai); };
             creators["give leader"] = [](PlayerbotAI* ai) { return new GiveLeaderAction(ai); };
             creators["cheat"] = [](PlayerbotAI* ai) { return new CheatAction(ai); };

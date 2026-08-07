@@ -2,6 +2,7 @@
 
 #include <shared_mutex>
 #include "WorldPosition.h"
+#include "MotionGenerators/PathFinder.h"
 
 //THEORY
 // 
@@ -263,6 +264,10 @@ namespace ai
         WorldPosition point;
         PathNodeType type = PathNodeType::NODE_PATH;
         uint32 entry = 0;
+
+        bool operator==(const PathNodePoint& p1) const { return point == p1.point && type == p1.type && entry == p1.entry; }
+
+        bool isWalkable() const { return (uint8)type <= (uint8)PathNodeType::NODE_NODE; }
     };
 
     //A complete list of points the bots has to walk to or teleport to.
@@ -280,18 +285,24 @@ namespace ai
         void clear() { fullPath.clear(); }
 
         bool empty() { return fullPath.empty(); }
-        std::vector<PathNodePoint> getPath() { return fullPath; }
+        bool cutTo(PathNodePoint point, bool including);
+
+
+        std::vector<PathNodePoint>& getPath() { return fullPath; }
         WorldPosition getFront() { return fullPath.front().point; }
         WorldPosition getBack() { return fullPath.back().point; }
 
         std::vector<WorldPosition> getPointPath() { std::vector<WorldPosition> retVec; for (const auto& p : fullPath) retVec.push_back(p.point); return retVec; };
 
-        bool makeShortCut(WorldPosition startPos, float maxDist, Unit* bot);
+        void makeShortCut(WorldPosition startPos, float maxDist, Unit* bot);
         bool shouldMoveToNextPoint(WorldPosition startPos, std::vector<PathNodePoint>::iterator beg, std::vector<PathNodePoint>::iterator ed, std::vector<PathNodePoint>::iterator p, float& moveDist, float maxDist);
-        WorldPosition getNextPoint(WorldPosition startPos, float maxDist, TravelNodePathType& pathType, uint32& entry, bool onTransport, WorldPosition& telePosition);
+        bool UpcommingSpecialMovement(WorldPosition startPos, float maxDist, bool onTransport);
 
+        void ClipPath(PlayerbotAI* ai, Unit* mover, bool ignoreEnemyTargets);
         std::ostringstream print();
     private:
+        std::vector<PathNodePoint>::iterator getNextPoint(WorldPosition startPos, float maxDist, bool onTransport);
+
         std::vector<PathNodePoint> fullPath;
     };
 
@@ -308,7 +319,7 @@ namespace ai
         float getTotalDistance();
 
         void setNodes(std::vector<TravelNode*> nodes1) { nodes = nodes1; }
-        std::vector<TravelNode*> getNodes() { return nodes; }
+        std::vector<TravelNode*>& getNodes() { return nodes; }
 
         void addTempNodes(std::vector<TravelNode*> nodes) { tempNodes.insert(tempNodes.end(), nodes.begin(), nodes.end()); }
         void cleanTempNodes() { for (auto node : tempNodes) delete node; }
@@ -349,7 +360,7 @@ namespace ai
 
         //Get all nodes
         std::vector<TravelNode*> getNodes() { return m_nodes; }
-        std::vector<TravelNode*> getNodes(WorldPosition pos, float range = -1);
+        std::vector<TravelNode*> getNodes(WorldPosition pos, float range = -1, uint32 transportEntry = 0);
 
         //Find nearest node.
         TravelNode* getNode(TravelNode* sameNode) { for (auto& node : m_map_nodes[sameNode->getMapId()]) { if (node->getName() == sameNode->getName() && node->getPosition() == sameNode->getPosition()) return node; } return nullptr; }
@@ -363,7 +374,7 @@ namespace ai
         TravelNodeRoute getRoute(TravelNode* start, TravelNode* goal, Unit* unit = nullptr);
 
         //Find the best node between two positions
-        TravelNodeRoute getRoute(WorldPosition startPos, WorldPosition endPos, std::vector<WorldPosition>& startPath, Unit* unit = nullptr);
+        TravelNodeRoute getRoute(WorldPosition startPos, WorldPosition endPos, std::vector<WorldPosition>& startPath, std::vector<WorldPosition>& endPath, Unit* unit = nullptr);
 
         //Find the full path between those locations
         static TravelPath getFullPath(WorldPosition startPos, WorldPosition endPos, Unit* unit = nullptr);
@@ -371,10 +382,17 @@ namespace ai
         //Manage/update nodes
         void manageNodes(Unit* bot, bool mapFull = false);
 
-        void setHasToGen() { hasToGen = true; }
+        void setHasToGen(bool enable = true) { hasToGen = enable; }
         bool gethasToGen() { return hasToGen || hasToFullGen; }
 
         void LoadMaps();
+
+        struct PathFindResult {
+            PathType type;
+            std::vector<WorldPosition> path;
+        };
+        
+        PathFindResult testPathToLoop(const WorldPosition& startPos, const WorldPosition& endPos, const Unit* bot, uint64 uid = 0, std::vector<WorldPosition> route = std::vector<WorldPosition>(), std::string type = "debug") const;
 
         //Below are the steps to creating the content stored in the node, link and path tables. 
         //Nodes are placed based on key locations based on objects/creatures in the world and paths are generated using the standardpathfinder.

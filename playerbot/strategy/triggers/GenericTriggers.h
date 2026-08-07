@@ -3,6 +3,7 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "Spells/SpellAuraDefines.h"
+#include "DungeonTriggers.h"
 
 namespace ai
 {
@@ -109,7 +110,7 @@ namespace ai
 		}
 
 		virtual std::string GetTargetName() override { return "current target"; }
-		virtual std::string getName() { return spell; }
+		virtual std::string getName() override { return spell; }
 		virtual bool IsActive() override;
 
 	protected:
@@ -305,7 +306,7 @@ namespace ai
     class RangedHighAoeTrigger : public AoeTrigger
     {
     public:
-        RangedHighAoeTrigger(PlayerbotAI* ai) : AoeTrigger(ai, 6) {}
+        RangedHighAoeTrigger(PlayerbotAI* ai) : AoeTrigger(ai, 5) {}
     };
 
     class RangedVeryHighAoeTrigger : public AoeTrigger
@@ -465,7 +466,7 @@ namespace ai
     {
     public:
         TargetInSightTrigger(PlayerbotAI* ai) : Trigger(ai, "target in sight") {}
-        virtual bool IsActive() { return AI_VALUE(Unit*, "grind target"); }
+        virtual bool IsActive() override { return AI_VALUE(Unit*, "grind target"); }
     };
 
     class DebuffTrigger : public BuffTrigger
@@ -487,8 +488,8 @@ namespace ai
         DebuffOnAttackerTrigger(PlayerbotAI* ai, std::string spell) : DebuffTrigger(ai, spell) {}
 
     public:
-        virtual Value<Unit*>* GetTargetValue();
-        virtual std::string getName() { return spell + " on attacker"; }
+        virtual Value<Unit*>* GetTargetValue() override;
+        virtual std::string getName() override { return spell + " on attacker"; }
     };
 
 	class BoostTrigger : public BuffTrigger
@@ -521,7 +522,7 @@ namespace ai
     {
     public:
         TimeTrigger(PlayerbotAI* ai, std::string name, int interval = 2) : Trigger(ai, name, interval) {}
-        virtual bool IsActive() { return true; }
+        virtual bool IsActive() override { return true; }
     };
 
     class AndTrigger : public Trigger, public Qualified
@@ -529,7 +530,7 @@ namespace ai
     public:
          AndTrigger(PlayerbotAI* ai, std::string name = "and", int checkInterval = 1) : Trigger(ai, name, checkInterval), Qualified() {}
         virtual bool IsActive() override;
-        virtual std::string getName();
+        virtual std::string getName() override;
     };
 
     class OrTrigger : public Trigger, public Qualified
@@ -537,7 +538,7 @@ namespace ai
     public:
         OrTrigger(PlayerbotAI* ai, std::string name = "or", int checkInterval = 1) : Trigger(ai, name, checkInterval), Qualified() {}
         virtual bool IsActive() override;
-        virtual std::string getName();
+        virtual std::string getName() override;
     };
 
     class TwoTriggers : public Trigger
@@ -550,7 +551,7 @@ namespace ai
         }
 
         virtual bool IsActive() override;
-        virtual std::string getName();
+        virtual std::string getName() override;
 
     protected:
         std::string name1;
@@ -561,15 +562,15 @@ namespace ai
     {
     public:
         ValueTrigger(PlayerbotAI* ai, std::string name = "val", int checkInterval = 1) : Trigger(ai, name, checkInterval), Qualified() {}
-        virtual bool IsActive() { name = getQualifier();  return AI_VALUE(bool, getQualifier()); }
+        virtual bool IsActive() override { name = getQualifier();  return AI_VALUE(bool, getQualifier()); }
     };
 
     class SnareTargetTrigger : public DebuffTrigger
     {
     public:
         SnareTargetTrigger(PlayerbotAI* ai, std::string spell, int interval = 1) : DebuffTrigger(ai, spell, interval) {}
-        virtual std::string getName() { return spell + " on snare target"; }
-        virtual Value<Unit*>* GetTargetValue();
+        virtual std::string getName() override { return spell + " on snare target"; }
+        virtual Value<Unit*>* GetTargetValue() override;
     };
 
     class NoManaTrigger : public Trigger
@@ -613,11 +614,11 @@ namespace ai
     };
 
     BEGIN_TRIGGER(PanicTrigger, Trigger)
-        virtual std::string getName() { return "panic"; }
+        virtual std::string getName() override { return "panic"; }
     END_TRIGGER()
 
     BEGIN_TRIGGER(OutNumberedTrigger, Trigger)
-        virtual std::string getName() { return "outnumbered"; }
+        virtual std::string getName() override { return "outnumbered"; }
     END_TRIGGER()
 
 	class NoPetTrigger : public Trigger
@@ -625,7 +626,7 @@ namespace ai
 	public:
 		NoPetTrigger(PlayerbotAI* ai) : Trigger(ai, "no pet", 30) {}
 
-		virtual bool IsActive() 
+		virtual bool IsActive() override
         {
 			return !AI_VALUE(Unit*, "pet target") && !AI_VALUE2(bool, "mounted", "self target");
 		}
@@ -641,7 +642,7 @@ namespace ai
 		}
 
 		virtual bool IsActive() override;
-		virtual std::string getName() { return "item count"; }
+		virtual std::string getName() override { return "item count"; }
 
 	protected:
 		std::string item;
@@ -679,7 +680,7 @@ namespace ai
     public:
         TimerTrigger(PlayerbotAI* ai) : Trigger(ai, "timer"), lastCheck(0) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             if (time(0) != lastCheck)
             {
@@ -697,6 +698,13 @@ namespace ai
 	{
 	public:
         TankAssistTrigger(PlayerbotAI* ai) : NoAttackersTrigger(ai, "tank assist") {}
+		virtual bool IsActive() override;
+	};
+
+    class DpsAssistTrigger : public Trigger
+	{
+	public:
+        DpsAssistTrigger(PlayerbotAI* ai) : Trigger(ai, "dps assist", 2) {}
 		virtual bool IsActive() override;
 	};
 
@@ -795,8 +803,8 @@ namespace ai
     {
     public:
         InterruptEnemyHealerTrigger(PlayerbotAI* ai, std::string spell) : SpellTrigger(ai, spell) {}
-        virtual Value<Unit*>* GetTargetValue();
-        virtual std::string getName() { return spell + " on enemy healer"; }
+        virtual Value<Unit*>* GetTargetValue() override;
+        virtual std::string getName() override { return spell + " on enemy healer"; }
     };
 
     class RandomBotUpdateTrigger : public RandomTrigger
@@ -804,7 +812,7 @@ namespace ai
     public:
         RandomBotUpdateTrigger(PlayerbotAI* ai) : RandomTrigger(ai, "random bot update", 30) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return RandomTrigger::IsActive() && AI_VALUE(bool, "random bot update");
         }
@@ -815,7 +823,7 @@ namespace ai
     public:
         NoNonBotPlayersAroundTrigger(PlayerbotAI* ai) : Trigger(ai, "no non bot players around", 10) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return !ai->HasPlayerNearby();
             /*if (!bot->InBattleGround())
@@ -830,7 +838,7 @@ namespace ai
     public:
         NewPlayerNearbyTrigger(PlayerbotAI* ai) : Trigger(ai, "new player nearby", 10) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return AI_VALUE(ObjectGuid, "new player nearby");
         }
@@ -841,7 +849,7 @@ namespace ai
     public:
         CollisionTrigger(PlayerbotAI* ai) : Trigger(ai, "collision", 5) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return AI_VALUE2(bool, "collision", "self target");
         }
@@ -891,7 +899,7 @@ namespace ai
     public:
         GiveItemTrigger(PlayerbotAI* ai, std::string name, std::string item) : Trigger(ai, name, 2), item(item) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return AI_VALUE2(Unit*, "party member without item", item) && AI_VALUE2(uint32, "item count", item);
         }
@@ -905,7 +913,7 @@ namespace ai
     public:
         GiveFoodTrigger(PlayerbotAI* ai) : GiveItemTrigger(ai, "give food", "conjured food") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return AI_VALUE(Unit*, "party member without food") && AI_VALUE2(uint32, "item count", item);
         }
@@ -916,7 +924,7 @@ namespace ai
     public:
         GiveWaterTrigger(PlayerbotAI* ai) : GiveItemTrigger(ai, "give water", "conjured water") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return AI_VALUE(Unit*, "party member without water") && AI_VALUE2(uint32, "item count", item);
         }
@@ -962,7 +970,7 @@ namespace ai
     {
     public:
         UseTrinketTrigger(PlayerbotAI* ai) : Trigger(ai, "use trinket", 3) {}
-        virtual bool IsActive() { return !AI_VALUE(std::list<Item*>, "trinkets on use").empty(); }
+        virtual bool IsActive() override { return !AI_VALUE(std::list<Item*>, "trinkets on use").empty(); }
     };
 
     class HasAreaDebuffTrigger : public Trigger 
@@ -991,7 +999,7 @@ namespace ai
     public:
         CannibalizeTrigger(PlayerbotAI* ai) : Trigger(ai, "cannibalize") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             if (AI_VALUE2(uint8, "health", "self target") > sPlayerbotAIConfig.almostFullHealth)
                 return false;
@@ -1022,7 +1030,7 @@ namespace ai
     public:
         WOtFTrigger(PlayerbotAI* ai) : Trigger(ai, "will of the forsaken") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return bot->HasAuraType(SPELL_AURA_MOD_FEAR);
             return bot->HasAuraType(SPELL_AURA_MOD_STUN);
@@ -1039,7 +1047,7 @@ namespace ai
         bool IsActive() override
         {
             return bot->HasAuraType(SPELL_AURA_MOD_ROOT) ||
-                   bot->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED);
+                   (bot->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED) && !ai->HasAnyAuraOf(bot, "tree of life", NULL));
         }
     };
 
@@ -1092,7 +1100,7 @@ namespace ai
     public:
         StoneformTrigger(PlayerbotAI* ai) : Trigger(ai, "stoneform") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             uint32 disMask = GetDispellMask(DISPEL_DISEASE);
             uint32 poisMask = GetDispellMask(DISPEL_POISON);
@@ -1118,7 +1126,7 @@ namespace ai
     public:
         ShadowmeldTrigger(PlayerbotAI* ai) : Trigger(ai, "shadowmeld") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* master = ai->GetMaster();
             if (ai->HasAura("shadowmeld", bot))
@@ -1132,7 +1140,7 @@ namespace ai
     public:
         ManaTapTrigger(PlayerbotAI* ai) : Trigger(ai, "mana tap") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, "current target");
             return target && AI_VALUE2(bool, "has mana", "current target");
@@ -1144,7 +1152,7 @@ namespace ai
     public:
         ArcanetorrentTrigger(PlayerbotAI* ai) : InterruptSpellTrigger(ai, "arcane torrent") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, "current target");
             return InterruptSpellTrigger::IsActive() && target && AI_VALUE2(float, "distance", "current target") <= 8.0f;
@@ -1156,7 +1164,7 @@ namespace ai
     public:
         WarStompTrigger(PlayerbotAI* ai) : Trigger(ai, "war stomp") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, "current target");
             return target && AI_VALUE2(bool, "combat", "self target") && AI_VALUE2(float, "distance", "current target") <= 8.0f &&
@@ -1171,7 +1179,7 @@ namespace ai
     public:
         PerceptionTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "perception") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             for (auto& attacker : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("possible attack targets")->Get())
             {
@@ -1257,6 +1265,17 @@ namespace ai
         DispelEnrageOnTargetTrigger(PlayerbotAI* ai, std::string name = "dispel enrage") : DispelOnTargetTrigger(ai, name, DISPEL_ENRAGE) {}
     };
 
+    class HasPoisonDebuffTrigger : public Trigger
+    {
+    public:
+        HasPoisonDebuffTrigger(PlayerbotAI* ai) : Trigger(ai, "has poison debuff", 3) {}
+
+        bool IsActive() override
+        {
+            return ai->HasAuraToDispel(bot, DISPEL_POISON);
+        }
+    };
+
     class RtscJumpTrigger : public Trigger
     {
     public:
@@ -1273,6 +1292,34 @@ namespace ai
         bool IsActive() override;
     };
 }
+
+class PotionCooldownTrigger : public ai::ItemBuffReadyTrigger
+{
+public:
+    PotionCooldownTrigger(PlayerbotAI* ai, uint32 itemID = 0, uint32 buffID = 0)
+        : ai::ItemBuffReadyTrigger(ai, "potion cooldown", itemID, buffID), lastPotionTime(0), localItemID(itemID), localBuffID(buffID) {}
+
+    virtual bool IsActive() override
+    {
+        if (localItemID == 0 && localBuffID == 0)
+        {
+            time_t now = time(0);
+            if (now - lastPotionTime >= 120)
+            {
+                lastPotionTime = now;
+                return true;
+            }
+            return false;
+        }
+
+        return ai::ItemBuffReadyTrigger::IsActive();
+    }
+
+private:
+    time_t lastPotionTime;
+    uint32 localItemID;
+    uint32 localBuffID;
+};
 
 #include "RangeTriggers.h"
 #include "HealthTriggers.h"

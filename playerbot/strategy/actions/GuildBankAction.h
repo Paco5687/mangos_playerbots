@@ -13,5 +13,9 @@ namespace ai
     private:
         bool Execute(std::string text, GameObject* bank, Player* requester);
         bool MoveFromCharToBank(Item* item, GameObject* bank, Player* requester);
+
+    public:
+        bool AutoDeposit(GameObject* bank);
+        bool AutoWithdraw(GameObject* bank);
     };
 }

@@ -9,6 +9,9 @@
 #include "playerbot/TravelMgr.h"
 #include "CheckMountStateAction.h"
 #include "TellLosAction.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
+#include "playerbot/strategy/values/ItemCountValue.h"
+#include "playerbot/TravelMgr.h"
 
 using namespace ai;
 
@@ -296,28 +299,31 @@ bool UseAction::Execute(Event& event)
                 targetItem = bot->GetItemByEntry(items[1]);
             }
         }
-
-        std::list<ObjectGuid> gos = chat->parseGameobjects(useName);
-        if (!gos.empty())
+        if (!targetItem)
         {
-            targetGameObject = ai->GetGameObject(*gos.begin());
-        }
-
-        float closest = 9999.0f;
-        std::list<ObjectGuid> nearestGOs = AI_VALUE(std::list<ObjectGuid>, "nearest game objects no los");
-        for (const ObjectGuid& goGUID : nearestGOs)
-        {
-            GameObject* go = ai->GetGameObject(goGUID);
-            if (go && std::string(go->GetName()).find(useName))
+            std::list<ObjectGuid> gos = chat->parseGameobjects(useName);
+            if (!gos.empty())
             {
-                const float distance = bot->GetDistance(go);
-                if (distance < closest)
+                targetGameObject = ai->GetGameObject(*gos.begin());
+            }
+
+            float closest = 9999.0f;
+            std::list<ObjectGuid> nearestGOs = AI_VALUE(std::list<ObjectGuid>, "nearest game objects no los");
+            for (const ObjectGuid& goGUID : nearestGOs)
+            {
+                GameObject* go = ai->GetGameObject(goGUID);
+                if (go && std::string(go->GetName()).find(useName))
                 {
-                    targetGameObject = go;
-                    closest = distance;
+                    const float distance = bot->GetDistance(go);
+                    if (distance < closest)
+                    {
+                        targetGameObject = go;
+                        closest = distance;
+                    }
                 }
             }
         }
+
     }
 
     if (targetGameObject != nullptr)
@@ -632,6 +638,12 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
 
         if (validTarget)
         {
+            // Validate spellInfo is a proper sSpellTemplate entry before constructing (mirrors MANGOS_ASSERT in Spell::Spell)
+            if (!spellInfo || spellInfo != sSpellTemplate.LookupEntry<SpellEntry>(spellInfo->Id))
+            {
+                continue;
+            }
+
             // Use triggered flag only for items with many spell casts and for not first cast
             BotUseItemSpell* spell = new BotUseItemSpell(bot, spellInfo, (successCasts > 0) ? TRIGGERED_OLD_TRIGGERED : TRIGGERED_NONE);
             spell->m_clientCast = true;
@@ -673,11 +685,13 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
 
             if (successCast)
             {
-                // Only add cooldown if the spell doesn't use a real item
-                if (itemUsed == nullptr)
+                if (itemUsed == nullptr && ai->HasCheat(BotCheatMask::item))
                 {
-                    bot->RemoveSpellCooldown(*spellInfo, false);
-                    bot->AddCooldown(*spellInfo, proto, false);
+                    if (!HasItemCooldown(itemId))
+                    {
+                        bot->RemoveSpellCooldown(*spellInfo, false);
+                        bot->AddCooldown(*spellInfo, proto, false);
+                    }
                 }
 
                 if (IsFood(proto) || IsDrink(proto))
@@ -727,7 +741,6 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
                 replyStr << " " << BOT_TEXT("command_target_self");
             }
 
-            // Stackable
             if (itemUsed && proto->Stackable > 1)
             {
                 uint32 count = itemUsed->GetCount();
@@ -744,7 +757,9 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
 
             ai->TellPlayerNoFacing(requester, BOT_TEXT2(replyStr.str(), replyArgs), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         }
-        
+
+        RESET_AI_VALUE2(uint32, "item count", itemId);
+
         return true;
     }
     else
@@ -912,29 +927,48 @@ bool UseAction::UseGameObject(Player* requester, Event& event, GameObject* gameO
 
 bool UseAction::UseQuestGiverItem(Player* requester, Item* item)
 {
-    if (item)
+    if (!item)
+        return false;
+
+    const ItemPrototype* proto = item->GetProto();
+    if (!proto || !proto->StartQuest)
+        return false;
+
+    const Quest* quest = sObjectMgr.GetQuestTemplate(proto->StartQuest);
+    if (!quest)
+        return false;
+
+    if (!bot->CanTakeQuest(quest, false))
+        return false;
+
+    if (item->GetOwnerGuid() != bot->GetObjectGuid())
+        return false;
+
+    if (!bot->HasItemCount(proto->ItemId, 1))
+        return false;
+
+    Item* validItem = bot->GetItemByGuid(item->GetObjectGuid());
+    if (!validItem || validItem != item)
+        return false;
+
+    if (!bot->CanAddQuest(quest, true))
+        return false;
+
+    bot->AddQuest(quest, nullptr);
+
+    if (bot->CanCompleteQuest(quest->GetQuestId()))
+        bot->CompleteQuest(quest->GetQuestId());
+
+    bot->DestroyItemCount(proto->ItemId, 1, true);
+
+    if (verbose)
     {
-        const Quest* quest = sObjectMgr.GetQuestTemplate(item->GetProto()->StartQuest);
-        if (quest)
-        {
-            WorldPacket packet(CMSG_QUESTGIVER_ACCEPT_QUEST, 8 + 4 + 4);
-            packet << item->GetObjectGuid();
-            packet << quest->GetQuestId();
-            packet << uint32(0);
-            bot->GetSession()->HandleQuestgiverAcceptQuestOpcode(packet);
-
-            if (verbose)
-            {
-                std::map<std::string, std::string> replyArgs;
-                replyArgs["%quest"] = chat->formatQuest(quest);
-                ai->TellPlayerNoFacing(requester, BOT_TEXT2("quest_accepted", replyArgs), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
-            }
-
-            return true;
-        }
+        std::map<std::string, std::string> replyArgs;
+        replyArgs["%quest"] = chat->formatQuest(quest);
+        ai->TellPlayerNoFacing(requester, BOT_TEXT2("quest_accepted", replyArgs), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
     }
 
-    return false;
+    return true;
 }
 
 bool UseAction::OpenItem(Player* requester, Item* item)
@@ -1136,8 +1170,9 @@ bool UseItemIdAction::isPossible()
     if (HasItemCooldown(itemId))
         return false;
 
-    if (!ai->HasCheat(BotCheatMask::item) && !bot->HasItemCount(itemId, 1))
+        if (!ai->HasCheat(BotCheatMask::item) && !bot->HasItemCount(itemId, 1))
         return false;
+
 
     uint32 spellCount = 0;
 
@@ -1235,6 +1270,7 @@ bool UseHearthStoneAction::Execute(Event& event)
     const bool used = UseAction::Execute(event);
     if (used)
     {
+        sPlayerbotAIConfig.logEvent(ai, "UseHearthStoneAction", event.getParam(), event.getSource());
         RESET_AI_VALUE(bool, "combat::self target");
         RESET_AI_VALUE(WorldPosition, "current position");
     }
@@ -1278,7 +1314,7 @@ bool UseHearthStoneAction::isUseful()
 
 bool UseRandomRecipeAction::isUseful()
 {
-   return !bot->IsInCombat() && !ai->HasActivePlayerMaster() && !bot->InBattleGround();
+   return !bot->IsInCombat() && !bot->InBattleGround();
 }
 
 bool UseRandomRecipeAction::Execute(Event& event)

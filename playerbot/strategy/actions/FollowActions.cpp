@@ -4,6 +4,7 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/Formations.h"
+#include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/LootObjectStack.h"
 
@@ -26,6 +27,8 @@ bool FollowAction::Execute(Event& event)
             }
         }
     }
+    else
+        moved = Follow(followTarget, 0, 0);
 
     return moved;
 }
@@ -41,7 +44,7 @@ bool FollowAction::isUseful()
 
     if (followTarget && followTarget->IsPlayer())
     {
-        if (AI_VALUE(GuidPosition, "rpg target") && AI_VALUE2(bool, "can free move to", AI_VALUE(GuidPosition, "rpg target").to_string()))
+        if (AI_VALUE(GuidPosition, "rpg target") && CanFreeMoveValue::CanFreeMoveTo(ai, AI_VALUE(GuidPosition, "rpg target")))
         {
             return false;
         }
@@ -57,6 +60,11 @@ bool FollowAction::isUseful()
 
     if (followTarget)
     {
+#ifndef MANGOSBOT_ZERO
+        if (bot->IsFreeFlying() || bot->IsFlying() || bot->IsSwimming())
+            distance = sServerFacade.GetDistance(bot, followTarget);
+        else
+#endif
         distance = sServerFacade.GetDistance2d(bot, followTarget);
     }
     else
@@ -66,7 +74,11 @@ bool FollowAction::isUseful()
         {
             return false;
         }
-
+#ifndef MANGOSBOT_ZERO
+        if (bot->IsFreeFlying() || bot->IsFlying() || bot->IsSwimming())
+            distance = sServerFacade.GetDistance(bot, loc.coord_x, loc.coord_y, loc.coord_z);
+        else
+#endif
         distance = sServerFacade.GetDistance2d(bot, loc.coord_x, loc.coord_y);
     }
 
@@ -97,6 +109,17 @@ bool FollowAction::CanDeadFollow(Unit* target)
         return false;
     }
     
+    return true;
+}
+
+bool StopFollowAction::isUseful()
+{
+    if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+        return false;
+
+    if (sServerFacade.GetChaseTarget(bot) && !sServerFacade.GetChaseTarget(bot)->IsPlayer() && sServerFacade.GetChaseTarget(bot)->IsMoving())
+        return false;
+
     return true;
 }
 
@@ -161,7 +184,8 @@ bool FleeToMasterAction::isUseful()
     if (target && ai->GetGroupMaster()->HasTarget(target->GetObjectGuid()))
         return false;
 
-    if (!ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+    if (!(ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+      ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)))
         return false;
 
     Unit* fTarget = AI_VALUE(Unit*, "master target");
@@ -171,7 +195,7 @@ bool FleeToMasterAction::isUseful()
 
     if (fTarget && fTarget->IsPlayer())
     {
-        if (AI_VALUE(GuidPosition, "rpg target") && AI_VALUE2(bool, "can free move to", AI_VALUE(GuidPosition, "rpg target").to_string()))
+        if (AI_VALUE(GuidPosition, "rpg target") && CanFreeMoveValue::CanFreeMoveTo(ai, AI_VALUE(GuidPosition, "rpg target")))
             return false;
     }
 

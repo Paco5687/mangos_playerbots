@@ -8,8 +8,8 @@ namespace ai
     public:
         GiveItemAction(PlayerbotAI* ai, std::string name, std::string item) : Action(ai, name), item(item) {}
         virtual bool Execute(Event& event) override;
-        virtual bool isUseful() { return GetTarget() && AI_VALUE2(uint8, "mana", "self target") > sPlayerbotAIConfig.lowMana; }
-        virtual Unit* GetTarget();
+        virtual bool isUseful() override { return GetTarget() && AI_VALUE2(uint8, "mana", "self target") > sPlayerbotAIConfig.lowMana; }
+        virtual Unit* GetTarget() override;
 
     protected:
         std::string item;
@@ -19,15 +19,16 @@ namespace ai
     {
     public:
         GiveFoodAction(PlayerbotAI* ai) : GiveItemAction(ai, "give food", "conjured food") {}
-        virtual Unit* GetTarget();
-        virtual bool isUseful()
+        virtual Unit* GetTarget() override;
+        virtual bool isUseful() override
         {
-            if (!GetTarget())
+            Unit* target = GetTarget();
+            if (!target)
                 return false;
 
-            bool isBot = GetTarget()->IsPlayer() && ((Player*)GetTarget())->GetPlayerbotAI();
+            bool isBot = target->IsPlayer() && ((Player*)target)->GetPlayerbotAI();
 
-            return !isBot || (isBot && !((Player*)GetTarget())->GetPlayerbotAI()->HasCheat(BotCheatMask::item));
+            return !isBot || (isBot && !((Player*)target)->GetPlayerbotAI()->HasCheat(BotCheatMask::item));
         }
     };
 
@@ -35,15 +36,16 @@ namespace ai
     {
     public:
         GiveWaterAction(PlayerbotAI* ai) : GiveItemAction(ai, "give water", "conjured water") {}
-        virtual Unit* GetTarget();
-        virtual bool isUseful()
+        virtual Unit* GetTarget() override;
+        virtual bool isUseful() override
         {
-            if (!GetTarget())
+            Unit* target = GetTarget();
+            if (!target)
                 return false;
 
-            bool isBot = GetTarget()->IsPlayer() && ((Player*)GetTarget())->GetPlayerbotAI();
+            bool isBot = target->IsPlayer() && ((Player*)target)->GetPlayerbotAI();
 
-            return !isBot || (isBot && !((Player*)GetTarget())->GetPlayerbotAI()->HasCheat(BotCheatMask::item));
+            return !isBot || (isBot && !((Player*)target)->GetPlayerbotAI()->HasCheat(BotCheatMask::item));
         }
     };
 }

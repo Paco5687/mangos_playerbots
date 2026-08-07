@@ -5,6 +5,7 @@
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
+#include "UnequipAction.h"
 
 using namespace ai;
 
@@ -16,6 +17,18 @@ bool EquipAction::Execute(Event& event)
     {
         ListItems(requester);
         return true;
+    }
+
+    uint8 targetSlot = NULL_SLOT;
+    if (text.find("mh ") == 0)
+    {
+        targetSlot = EQUIPMENT_SLOT_MAINHAND;
+        text = text.substr(3);
+    }
+    else if (text.find("oh ") == 0)
+    {
+        targetSlot = EQUIPMENT_SLOT_OFFHAND;
+        text = text.substr(3);
     }
 
     ItemIds ids = chat->parseItems(text);
@@ -37,7 +50,7 @@ bool EquipAction::Execute(Event& event)
             }
 
             uint16 dest;
-            InventoryResult msg = bot->CanEquipItem(NULL_SLOT, dest, item, true);
+            InventoryResult msg = bot->CanEquipItem(targetSlot, dest, item, true);
 
             if (msg != EQUIP_ERR_OK)
             {
@@ -54,7 +67,14 @@ bool EquipAction::Execute(Event& event)
         }
     }
 
-    EquipItems(requester, ids);
+    if (targetSlot != NULL_SLOT)
+    {
+        EquipItemsToSlot(requester, ids, targetSlot);
+    }
+    else
+    {
+        EquipItems(requester, ids);
+    }
     return true;
 }
 
@@ -78,12 +98,82 @@ void EquipAction::ListItems(Player* requester)
     ai->InventoryTellItems(requester, items, soulbound);
 }
 
+bool EquipAction::IsEnchantable(Item* item, uint32 spellid)
+{
+
+#ifdef MANGOS
+   SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellid);
+#else
+   SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellid);
+#endif
+   if (!spellInfo)
+      return false;
+
+    return ((1 << item->GetProto()->SubClass) & spellInfo->EquippedItemSubClassMask) &&
+      ((1 << item->GetProto()->InventoryType) & spellInfo->EquippedItemInventoryTypeMask);
+
+}
+
+void EquipAction::EnchantItem(Item* item)
+{
+    if (item)
+    {
+        int tab = AiFactory::GetPlayerSpecTab(bot);
+        uint32 tempId = uint32((uint32)bot->getClass() * (uint32)10);
+        uint8 spec = tempId += (uint32)tab;
+
+        if (enchants.empty())
+        {
+            auto result = WorldDatabase.PQuery("SELECT class, spec, spellid, slotid FROM ai_playerbot_enchants");
+            if (result)
+            {
+                do
+                {
+                    Field* fields = result->Fetch();
+
+                    EnchantTemplate pEnchant;
+                    pEnchant.ClassId = fields[0].GetUInt8();
+                    pEnchant.SpecId = fields[1].GetUInt8();
+                    pEnchant.SpellId = fields[2].GetUInt32();
+                    pEnchant.SlotId = fields[3].GetUInt8();
+                    enchants.push_back(pEnchant);
+                } while (result->NextRow());
+            }
+        }
+
+        for (const auto& enchant : enchants)
+        {
+            if (enchant.ClassId == bot->getClass() && enchant.SpecId == spec)
+            {
+                if (IsEnchantable(item, enchant.SpellId))
+                    ai->EnchantItemT(enchant.SpellId, enchant.SlotId, item);
+            }
+        }
+    }
+}
+
 void EquipAction::EquipItems(Player* requester, ItemIds ids)
 {
-    for (ItemIds::iterator i =ids.begin(); i != ids.end(); i++)
+    for (ItemIds::iterator i = ids.begin(); i != ids.end(); i++)
     {
         FindItemByIdVisitor visitor(*i);
         EquipItem(requester, &visitor);        
+    }
+}
+
+void EquipAction::EquipItemsToSlot(Player* requester, ItemIds ids, uint8 targetSlot)
+{
+    for (ItemIds::iterator i = ids.begin(); i != ids.end(); i++)
+    {
+        FindItemByIdVisitor visitor(*i);
+        ai->InventoryIterateItems(&visitor, IterateItemsMask::ITERATE_ITEMS_IN_BAGS);
+        std::list<Item*> items = visitor.GetResult();
+        if (!items.empty())
+        {
+            Item* item = *items.begin();
+            
+            EquipItemToSlot(requester, *items.begin(), targetSlot);
+        }
     }
 }
 
@@ -93,12 +183,14 @@ void EquipAction::EquipItem(Player* requester, FindItemVisitor* visitor)
     std::list<Item*> items = visitor->GetResult();
 	if (!items.empty()) 
     {
-        EquipItem(requester, *items.begin());
+        Item* item = *items.begin();
+
+        EquipItem(ai, requester, item);
     }
 }
 
 //Return the bag slot with smallest bag
-uint8 EquipAction::GetSmallestBagSlot()
+uint8 EquipAction::GetSmallestBagSlot(Player* bot)
 {
     int8 curBag = 0;
     uint32 curSlots = 0;
@@ -124,11 +216,72 @@ uint8 EquipAction::GetSmallestBagSlot()
     return curBag;
 }
 
-void EquipAction::EquipItem(Player* requester, Item* item)
+void EquipAction::EquipItemToSlot(Player* requester, Item* item, uint8 targetSlot)
 {
     uint8 bagIndex = item->GetBagSlot();
     uint8 slot = item->GetSlot();
     uint32 itemId = item->GetProto()->ItemId;
+
+    uint16 dest;
+    InventoryResult msg = bot->CanEquipItem(targetSlot, dest, item, true);
+    if (msg != EQUIP_ERR_OK)
+    {
+        bot->SendEquipError(msg, item, nullptr);
+        return;
+    }
+
+    uint8 destSlot = dest & 0xFF;
+    if (destSlot != targetSlot)
+    {
+        ai->TellPlayer(requester, "Cannot equip this item to the specified slot.");
+        return;
+    }
+
+    Item* oldItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, targetSlot);
+    Item* oldOffhand = nullptr;
+    if (destSlot == EQUIPMENT_SLOT_MAINHAND && item->GetProto()->InventoryType == INVTYPE_2HWEAPON)
+        oldOffhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+
+    uint16 src = ((bagIndex << 8) | slot);
+    uint16 dstPos = ((INVENTORY_SLOT_BAG_0 << 8) | targetSlot);
+
+    bot->SwapItem(src, dstPos);
+
+    RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(item).GetQualifier());
+
+    if (oldItem)
+        RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(oldItem).GetQualifier());
+    if (oldOffhand)
+        RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(oldOffhand).GetQualifier());
+
+    sPlayerbotAIConfig.logEvent(ai, "EquipAction", item->GetProto()->Name1, std::to_string(item->GetProto()->ItemId));
+
+    std::map<std::string, std::string> args;
+    args["%item"] = chat->formatItem(item);
+    ai->TellPlayer(requester, BOT_TEXT2("equip_command", args), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+}
+
+void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool silent)
+{
+    Player* bot = ai->GetBot();
+    AiObjectContext* context = ai->GetAiObjectContext();
+
+    uint8 bagIndex = item->GetBagSlot();
+    uint8 slot = item->GetSlot();
+    uint32 itemId = item->GetProto()->ItemId;
+
+    uint16 dest;
+    InventoryResult result = bot->CanEquipItem(NULL_SLOT, dest, item, !item->IsBag());
+
+    Item* oldItem = nullptr;
+    Item* oldOffhand = nullptr;
+    if (result == EQUIP_ERR_OK)
+    {
+        oldItem = bot->GetItemByPos(dest);
+
+        if (oldItem && oldItem->GetSlot() == EQUIPMENT_SLOT_MAINHAND && item->GetProto()->InventoryType == INVTYPE_2HWEAPON)
+            oldOffhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+    }
 
     if (item->GetProto()->InventoryType == INVTYPE_AMMO)
     {
@@ -140,7 +293,7 @@ void EquipAction::EquipItem(Player* requester, Item* item)
         if (item->GetProto()->Class == ITEM_CLASS_CONTAINER || item->GetProto()->Class == ITEM_CLASS_QUIVER)
         {
             Bag* pBag = (Bag*)&item;
-            uint8 newBagSlot = GetSmallestBagSlot();
+            uint8 newBagSlot = GetSmallestBagSlot(bot);
             if (newBagSlot > 0)
             {
                 uint16 src = ((bagIndex << 8) | slot);
@@ -166,11 +319,21 @@ void EquipAction::EquipItem(Player* requester, Item* item)
         }
     }
 
+    RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(item).GetQualifier());
+
+    if (oldItem)
+        RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(oldItem).GetQualifier());
+    if (oldOffhand)
+        RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(oldOffhand).GetQualifier());
+
     sPlayerbotAIConfig.logEvent(ai, "EquipAction", item->GetProto()->Name1, std::to_string(item->GetProto()->ItemId));
 
-    std::map<std::string, std::string> args;
-    args["%item"] = chat->formatItem(item);
-    ai->TellPlayer(requester, BOT_TEXT2("equip_command", args), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+    if (!silent)
+    {
+        std::map<std::string, std::string> args;
+        args["%item"] = ChatHelper::formatItem(item);
+        ai->TellPlayer(requester, BOT_TEXT2("equip_command", args), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+    }
 }
 
 bool EquipUpgradesAction::Execute(Event& event)
@@ -238,6 +401,14 @@ bool EquipUpgradesAction::Execute(Event& event)
         }
     }
 
+    Item* oldMainhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+    Item* oldOffhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+        
+    if (oldMainhand)
+        UnequipAction::UnequipItem(ai, bot, oldMainhand, true);
+    if (oldOffhand)
+        UnequipAction::UnequipItem(ai, bot, oldOffhand, true);
+
     context->ClearExpiredValues("item usage", 10); //Clear old item usage.
 
     std::list<Item*> items;
@@ -250,7 +421,14 @@ bool EquipUpgradesAction::Execute(Event& event)
 
     bool didEquip = false;
 
-    items.sort([plr = bot](Item* i, Item* j) {return sRandomItemMgr.ItemStatWeight(plr, i) > sRandomItemMgr.ItemStatWeight(plr, j); });
+    items.sort([plr = bot](Item* i, Item* j) {
+        bool iMain = i->GetProto()->InventoryType == INVTYPE_WEAPONMAINHAND;
+        bool jMain = j->GetProto()->InventoryType == INVTYPE_WEAPONMAINHAND;
+
+        if (iMain != jMain)
+            return iMain; // mainhand comes first
+
+        return sRandomItemMgr.ItemStatWeight(plr, i) > sRandomItemMgr.ItemStatWeight(plr, j); });
 
     for (auto& item : items)
     {
@@ -263,10 +441,44 @@ bool EquipUpgradesAction::Execute(Event& event)
         if (usage == ItemUsage::ITEM_USAGE_EQUIP || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP)
         {
             sLog.outDetail("Bot #%d <%s> auto equips item %d (%s)", bot->GetGUIDLow(), bot->GetName(), item->GetProto()->ItemId, usage == ItemUsage::ITEM_USAGE_EQUIP ? "better than current" : usage == ItemUsage::ITEM_USAGE_BAD_EQUIP ? "wrong item but empty slot" : "");
-            EquipItem(GetMaster(), item);   
+            ai->TellDebug(ai->GetMaster(), "Equipping: " + chat->formatItem(item) + " - " + ItemUsageValue::ReasonForNeed(usage, item, 1, bot), "debug equip");
+
+            EquipItem(ai, GetMaster(), item, item == oldMainhand || item == oldOffhand);  
             didEquip = true;
+
+            // auto enchant if cheat is turned on
+            if (sPlayerbotAIConfig.autoEnchantUpgradeLoot && !item->GetEnchantmentId(EnchantmentSlot(0)))
+                EnchantItem(item); 
+        }
+    }
+
+    // Check if main-hand has higher top-end damage than off-hand
+    if (didEquip && bot->CanDualWield())
+    {
+        Item* mh = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+        Item* oh = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+
+        if (mh && oh
+            && mh->GetProto()->Class == ITEM_CLASS_WEAPON
+            && oh->GetProto()->Class == ITEM_CLASS_WEAPON
+            && mh->GetProto()->InventoryType != INVTYPE_2HWEAPON)
+        {
+            float mhMaxDmg = mh->GetProto()->Damage[0].DamageMax;
+            float ohMaxDmg = oh->GetProto()->Damage[0].DamageMax;
+
+            if (ohMaxDmg > mhMaxDmg)
+            {
+                uint16 srcPos = ((INVENTORY_SLOT_BAG_0 << 8) | EQUIPMENT_SLOT_MAINHAND);
+                uint16 dstPos = ((INVENTORY_SLOT_BAG_0 << 8) | EQUIPMENT_SLOT_OFFHAND);
+                bot->SwapItem(srcPos, dstPos);
+
+                sLog.outDetail("Bot #%d <%s> swapped MH/OH weapons to put higher top-end damage (%.1f) in main hand",
+                    bot->GetGUIDLow(), bot->GetName(), ohMaxDmg);
+            }
         }
     }
 
     return didEquip;
 }
+
+

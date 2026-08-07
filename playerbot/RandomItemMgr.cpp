@@ -45,7 +45,7 @@ RandomItemMgr::RandomItemMgr()
     viableSlots[EQUIPMENT_SLOT_OFFHAND].insert(INVTYPE_WEAPON);
     viableSlots[EQUIPMENT_SLOT_OFFHAND].insert(INVTYPE_2HWEAPON);
     viableSlots[EQUIPMENT_SLOT_OFFHAND].insert(INVTYPE_SHIELD);
-    //viableSlots[EQUIPMENT_SLOT_OFFHAND].insert(INVTYPE_WEAPONMAINHAND);
+    viableSlots[EQUIPMENT_SLOT_OFFHAND].insert(INVTYPE_WEAPONOFFHAND);
     viableSlots[EQUIPMENT_SLOT_OFFHAND].insert(INVTYPE_HOLDABLE);
     viableSlots[EQUIPMENT_SLOT_RANGED].insert(INVTYPE_RANGED);
     viableSlots[EQUIPMENT_SLOT_RANGED].insert(INVTYPE_THROWN);
@@ -156,6 +156,9 @@ RandomItemMgr::~RandomItemMgr()
     for (std::map<RandomItemType, RandomItemPredicate*>::iterator i = predicates.begin(); i != predicates.end(); ++i)
         delete i->second;
 
+    for (auto& [itemId, info] : itemInfoCache)
+        delete info;
+
     predicates.clear();
 }
 
@@ -193,6 +196,7 @@ RandomItemList RandomItemMgr::Query(uint32 level, RandomItemType type, RandomIte
 
 void RandomItemMgr::BuildRandomItemCache()
 {
+    randomItemCache.clear();
     auto results = CharacterDatabase.PQuery("select lvl, type, item from ai_playerbot_rnditem_cache");
     if (results)
     {
@@ -588,7 +592,7 @@ bool RandomItemMgr::ShouldEquipWeaponForSpec(uint8 playerclass, uint8 spec, Item
     {
         if (m_weightScales[spec].info.name == "prot")
         {
-            mh_weapons = { ITEM_SUBCLASS_WEAPON_SWORD, ITEM_SUBCLASS_WEAPON_AXE, ITEM_SUBCLASS_WEAPON_MACE, ITEM_SUBCLASS_WEAPON_FIST };
+            mh_weapons = { ITEM_SUBCLASS_WEAPON_SWORD, ITEM_SUBCLASS_WEAPON_AXE, ITEM_SUBCLASS_WEAPON_MACE, ITEM_SUBCLASS_WEAPON_DAGGER, ITEM_SUBCLASS_WEAPON_FIST };
             oh_weapons = { ITEM_SUBCLASS_ARMOR_SHIELD };
             r_weapons = { ITEM_SUBCLASS_WEAPON_BOW, ITEM_SUBCLASS_WEAPON_CROSSBOW, ITEM_SUBCLASS_WEAPON_GUN };
         }
@@ -599,7 +603,8 @@ bool RandomItemMgr::ShouldEquipWeaponForSpec(uint8 playerclass, uint8 spec, Item
         }
         else
         {
-            mh_weapons = { ITEM_SUBCLASS_WEAPON_SWORD, ITEM_SUBCLASS_WEAPON_AXE, ITEM_SUBCLASS_WEAPON_MACE, ITEM_SUBCLASS_WEAPON_FIST };
+            mh_weapons = { ITEM_SUBCLASS_WEAPON_SWORD, ITEM_SUBCLASS_WEAPON_AXE, ITEM_SUBCLASS_WEAPON_MACE, ITEM_SUBCLASS_WEAPON_DAGGER, ITEM_SUBCLASS_WEAPON_FIST };
+            oh_weapons = { ITEM_SUBCLASS_WEAPON_SWORD, ITEM_SUBCLASS_WEAPON_AXE, ITEM_SUBCLASS_WEAPON_MACE, ITEM_SUBCLASS_WEAPON_DAGGER, ITEM_SUBCLASS_WEAPON_FIST };
             r_weapons = { ITEM_SUBCLASS_WEAPON_BOW, ITEM_SUBCLASS_WEAPON_CROSSBOW, ITEM_SUBCLASS_WEAPON_GUN };
         }
         break;
@@ -832,6 +837,17 @@ bool RandomItemMgr::CanEquipWeapon(uint8 clazz, ItemPrototype const* proto)
 
 void RandomItemMgr::BuildItemInfoCache()
 {
+    struct CachedConditionEntry
+    {
+        uint32 type;
+        uint32 value1;
+        uint32 value2;
+    };
+
+    for (auto& [key, itemInfo] : itemInfoCache)
+        if (itemInfo)
+            delete itemInfo;
+
     uint32 maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     for (uint32 i = 0; i <= MAX_STAT_SCALES; ++i)
@@ -963,6 +979,22 @@ void RandomItemMgr::BuildItemInfoCache()
     }
 
     sLog.outString("Loaded %d loot templates...", (uint32)dropMap->size());
+
+    std::map<uint32, std::vector<CachedConditionEntry> > conditionCache;
+    if (auto result = WorldDatabase.PQuery("SELECT condition_entry, type, value1, value2 FROM conditions"))
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+
+            CachedConditionEntry condition;
+            condition.type = fields[1].GetUInt32();
+            condition.value1 = fields[2].GetUInt32();
+            condition.value2 = fields[3].GetUInt32();
+
+            conditionCache[fields[0].GetUInt32()].push_back(condition);
+        } while (result->NextRow());
+    }
 
     sLog.outString("Calculating stat weights for %d items...", sItemStorage.GetMaxEntry());
     BarGoLink bar(sItemStorage.GetMaxEntry());
@@ -1214,28 +1246,24 @@ void RandomItemMgr::BuildItemInfoCache()
                         if (!crItem || !crItem->conditionId)
                             continue;
 
-                        if (auto result = WorldDatabase.PQuery("SELECT type, value1, value2 FROM conditions WHERE condition_entry = '%u'", crItem->conditionId))
+                        auto conditionItr = conditionCache.find(crItem->conditionId);
+                        if (conditionItr != conditionCache.end())
                         {
-                            do
+                            for (CachedConditionEntry const& condition : conditionItr->second)
                             {
-                                Field *fields = result->Fetch();
-                                uint32 m_type = fields[0].GetUInt32();
-                                if (m_type != CONDITION_REPUTATION_RANK_MIN)
+                                if (condition.type != CONDITION_REPUTATION_RANK_MIN)
                                     continue;
 
-                                uint32 m_value1 = fields[1].GetUInt32();
-                                uint32 m_value2 = fields[2].GetUInt32();
-
 #ifdef MANGOSBOT_ONE
-                                if (FactionEntry const* faction = sFactionStore.LookupEntry<FactionEntry>(m_value1))
+                                if (FactionEntry const* faction = sFactionStore.LookupEntry<FactionEntry>(condition.value1))
 #else
-                                if (FactionEntry const* faction = sFactionStore.LookupEntry(m_value1))
+                                if (FactionEntry const* faction = sFactionStore.LookupEntry(condition.value1))
 #endif
                                 {
-                                    cacheInfo->repFaction = m_value1;
-                                    cacheInfo->repRank = m_value2;
+                                    cacheInfo->repFaction = condition.value1;
+                                    cacheInfo->repRank = condition.value2;
                                 }
-                            } while (result->NextRow());
+                            }
                         }
                     }
                 }
@@ -3291,6 +3319,8 @@ void RandomItemMgr::BuildEquipCache()
 {
     uint32 maxLevel = DEFAULT_MAX_LEVEL;
 
+    equipCache.clear();
+
     auto results = CharacterDatabase.PQuery("select clazz, spec, lvl, slot, quality, item from ai_playerbot_equip_cache");
     if (results)
     {
@@ -3732,6 +3762,8 @@ uint32 RandomItemMgr::GetRandomFood(uint32 level, uint32 category)
 
 void RandomItemMgr::BuildTradeCache()
 {
+    tradeCache.clear(); 
+
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
     if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
         maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);

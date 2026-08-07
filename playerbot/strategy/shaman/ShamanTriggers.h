@@ -7,20 +7,45 @@ namespace ai
     {
     public:
         ShamanWeaponTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "rockbiter weapon") {}
-        virtual bool IsActive();
+        virtual bool IsActive() override;
     private:
         static std::list<std::string> spells;
     };
 
-    class ReadyToRemoveTotemsTrigger : public Trigger 
+    class ReadyToRemoveTotemsTrigger : public Trigger
     {
     public:
-        ReadyToRemoveTotemsTrigger(PlayerbotAI* ai) : Trigger(ai, "ready to remove totems", 5) {}
+        ReadyToRemoveTotemsTrigger(PlayerbotAI* ai) : Trigger(ai, "ready to remove totems", 10) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
+            bool totemIsNear = false;
+            std::list<ObjectGuid> units = *context->GetValue<std::list<ObjectGuid>>("nearest npcs");
+            for (std::list<ObjectGuid>::iterator i = units.begin(); i != units.end(); i++)
+            {
+                Unit* unit = ai->GetUnit(*i);
+                if (!unit)
+                    continue;
+
+                Creature* totem = dynamic_cast<Creature*>(unit);
+                if (!totem || !totem->IsTotem())
+                    continue;
+
+                Unit* totemOwner = totem->GetCreator(totem);
+                if (!totemOwner || totemOwner != bot)
+                    continue;
+
+                const bool totemIsInRange = sServerFacade.GetDistance2d(totemOwner, totem) <= ai->GetRange("spell");
+
+                if (totemIsInRange) 
+                {
+                    totemIsNear = true;
+                    break;
+                }
+            }
             // Avoid removing any of the big cooldown totems.
             return AI_VALUE(bool, "have any totem")
+                && !totemIsNear
                 && !AI_VALUE2(bool, "has totem", "mana tide totem")
                 && !AI_VALUE2(bool, "has totem", "earth elemental totem")
                 && !AI_VALUE2(bool, "has totem", "fire elemental totem");
@@ -32,7 +57,7 @@ namespace ai
     public:
         TotemsAreNotSummonedTrigger(PlayerbotAI* ai) : Trigger(ai, "no totems summoned", 5) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return !AI_VALUE(bool, "have any totem");
         }
@@ -43,7 +68,7 @@ namespace ai
     public:
         TotemTrigger(PlayerbotAI* ai, std::string spell, int attackerCount = 0) : Trigger(ai, spell), attackerCount(attackerCount) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
 		{
             return AI_VALUE(uint8, "attackers count") >= attackerCount && !AI_VALUE2(bool, "has totem", name);
         }
@@ -57,7 +82,7 @@ namespace ai
     public:
         FireTotemTrigger(PlayerbotAI* ai, bool inMovement = true) : Trigger(ai, "trigger spec appropriate fire totem", 5), inMovement(inMovement) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             if (!inMovement && bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
             {
@@ -74,7 +99,7 @@ namespace ai
             }
             else if (ai->HasStrategy("totem fire resistance", BotState::BOT_STATE_COMBAT))
             {
-                return !AI_VALUE2(bool, "has totem", "frost resistance totem");
+                return !AI_VALUE2(bool, "has totem", "fire resistance totem");
             }
             else if (ai->HasStrategy("totem fire magma", BotState::BOT_STATE_COMBAT))
             {
@@ -103,7 +128,7 @@ namespace ai
     {
     public:
         FireTotemAoeTrigger(PlayerbotAI* ai) : Trigger(ai, "trigger spec appropriate fire totem aoe", 2) {}
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return AI_VALUE(uint8, "attackers count") >= 3 &&
                 !AI_VALUE2(bool, "has totem", "searing totem") &&
@@ -120,7 +145,7 @@ namespace ai
     public:
         EarthTotemTrigger(PlayerbotAI* ai, bool inMovement = true) : Trigger(ai, "trigger spec appropriate earth totem", 5), inMovement(inMovement) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             if (!inMovement && bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
             {
@@ -167,7 +192,7 @@ namespace ai
     public:
         AirTotemTrigger(PlayerbotAI* ai, bool inMovement = true) : Trigger(ai, "trigger spec appropriate air totem", 5), inMovement(inMovement) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             if (!inMovement && bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
             {
@@ -224,7 +249,7 @@ namespace ai
     public:
         WaterTotemTrigger(PlayerbotAI* ai, bool inMovement = true) : Trigger(ai, "trigger spec appropriate water totem", 5), inMovement(inMovement) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             if (!inMovement && bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
             {
@@ -288,7 +313,7 @@ namespace ai
     {
     public:
         PurgeTrigger(PlayerbotAI* ai) : TargetAuraDispelTrigger(ai, "purge", DISPEL_MAGIC, 3) {}
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, "current target");
             if (!target)
@@ -305,7 +330,7 @@ namespace ai
                     const Aura* aura = *itr;
                     const SpellEntry* entry = aura->GetSpellProto();
                     uint32 spellId = entry->Id;
-                    if (!IsPositiveSpell(spellId))
+                    if (!IsPositiveSpell(spellId) || !IsPositiveAuraEffect(entry, aura->GetEffIndex()))
                         continue;
 
                     std::vector<uint32> ignoreSpells;
@@ -343,7 +368,7 @@ namespace ai
     public:
         WaterWalkingTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "water walking", 7) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return BuffTrigger::IsActive() && AI_VALUE2(bool, "swimming", "self target");
         }
@@ -354,7 +379,7 @@ namespace ai
     public:
         WaterBreathingTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "water breathing", 5) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return BuffTrigger::IsActive() && AI_VALUE2(bool, "swimming", "self target");
         }
@@ -365,7 +390,7 @@ namespace ai
     public:
         WaterWalkingOnPartyTrigger(PlayerbotAI* ai) : BuffOnPartyTrigger(ai, "water walking on party", 7) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return BuffOnPartyTrigger::IsActive() && AI_VALUE2(bool, "swimming", "self target");
         }
@@ -376,7 +401,7 @@ namespace ai
     public:
         WaterBreathingOnPartyTrigger(PlayerbotAI* ai) : BuffOnPartyTrigger(ai, "water breathing on party", 2) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return BuffOnPartyTrigger::IsActive() && AI_VALUE2(bool, "swimming", "self target");
         }
@@ -422,7 +447,7 @@ namespace ai
     {
     public:
         ShockTrigger(PlayerbotAI* ai) : DebuffTrigger(ai, "earth shock") {}
-        virtual bool IsActive();
+        virtual bool IsActive() override;
     };
 
     class FrostShockSnareTrigger : public SnareTargetTrigger
@@ -484,7 +509,7 @@ namespace ai
     public:
         PartyTankEarthShieldTrigger(PlayerbotAI* ai) : BuffOnTankTrigger(ai, "earth shield") {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Group* group = bot->GetGroup();
             if (group)

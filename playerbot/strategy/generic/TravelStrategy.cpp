@@ -12,8 +12,15 @@ float TravelActionMultiplier::GetValue(Action* action)
     bool hasTarget = AI_VALUE(bool, "travel target active");
     std::string name = action->getName();
 
-    if (hasTarget && name.find("request") == 0 )
+    if (hasTarget && name.find("request") == 0)
     {
+        if (name.find("guild meeting") != std::string::npos)
+            return 1.0f;
+        if (name.find("reagent vendor") != std::string::npos)
+            return 1.0f;
+        if (name.find("guild order") != std::string::npos)
+            return 1.0f;
+
         return 0.0f;
     }
 
@@ -47,6 +54,7 @@ void TravelStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
         {"",TravelDestinationPurpose::Vendor, 6.94f},                                                          // 90%
         {"",TravelDestinationPurpose::Repair, 6.93f},                                                          // 90%
         {"val::and::{should get money,can get mail,should get mail}", TravelDestinationPurpose::Mail, 6.79f},  //100%
+        {"val::or::{should bank deposit,should bank withdraw}", TravelDestinationPurpose::Bank, 6.78f},    //100%
         {"val::should get money", TravelDestinationPurpose::Grind, 6.77f},                                     // 90%
         {"",TravelDestinationPurpose::Mail, 6.6f},                                                             // 30%
         {"",TravelDestinationPurpose::GatherMining, 6.5f},                                                     // 90%/40% in group
@@ -77,6 +85,9 @@ void TravelStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
         {"val::should travel named::city","request named travel target::city", 6.85f},                        // 10%
         {"val::and::{has strategy::rpg quest,has focus travel target}","request quest travel target", 6.84f}, //100%
         {"val::should travel named::pvp","request named travel target::pvp", 6.83f},                          // 25%
+        {"val::should travel named::guild meeting","request named travel target::guild meeting", 6.96f},      //100%
+        {"val::should travel named::reagent vendor","request named travel target::reagent vendor", 6.955f},   //100%
+        {"val::should travel named::guild order","request named travel target::guild order", 6.95f},          //100%
         {"val::and::{has strategy::rpg quest,should get money}", "request quest travel target", 6.78f},       // 90%
         {"val::not::travel target active","refresh travel target", 6.7f},                                     // 90%
         {"val::not::travel target active","choose group travel target", 6.65f},                               // 50%
@@ -102,6 +113,10 @@ void TravelStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "has nearby quest taker",
         NextAction::array(0, new NextAction("reset travel target", 6.99f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "val::travel target ready",
+        NextAction::array(0, new NextAction("check mount state", 1), new NextAction("move to travel target", 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "val::travel target traveling",

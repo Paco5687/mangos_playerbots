@@ -4,6 +4,10 @@
 #include "ChooseTravelTargetAction.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/strategy/values/TravelValues.h"
+#include "playerbot/strategy/values/SharedValueContext.h"
+#include "playerbot/strategy/values/GuildValues.h"
+#include "playerbot/strategy/values/FreeMoveValues.h"
+#include "Guilds/GuildMgr.h"
 #include <iomanip>
 
 using namespace ai;
@@ -12,6 +16,9 @@ inline std::string GetTravelPurposeName(std::string purpose)
 {
     if (Qualified::isValidNumberString(purpose) && TravelDestinationPurposeName.find(TravelDestinationPurpose(stoi(purpose))) != TravelDestinationPurposeName.end())
         return TravelDestinationPurposeName.at(TravelDestinationPurpose(stoi(purpose)));
+
+    if (purpose.empty())
+        return "quest";
 
     return purpose;
 }
@@ -50,7 +57,20 @@ bool ChooseTravelTargetAction::Execute(Event& event)
     if (futureTravelPurpose == "pvp")
         newTarget.SetForced(true);
 
-    newTarget.SetRelevance(targetRelevance);
+    if (AI_VALUE2(std::string, "manual string", "future travel condition") == "should travel named::guild meeting")
+    {
+        newTarget.SetForced(true);
+        newTarget.SetRelevance(std::max<uint32>(targetRelevance, 199u));
+    }
+    else if (AI_VALUE2(std::string, "manual string", "future travel condition") == "should travel named::guild order")
+    {
+        newTarget.SetForced(true);
+        newTarget.SetRelevance(std::max<uint32>(targetRelevance, 198u));
+    }
+    else
+    {
+        newTarget.SetRelevance(targetRelevance);
+    }
 
     if (!SetBestTarget(requester, &newTarget, destinationList))
     {
@@ -80,8 +100,8 @@ bool ChooseTravelTargetAction::isUseful()
 
 void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* newTarget, TravelTarget* oldTarget)
 {
-    if(AI_VALUE2(bool, "can free move to", newTarget->GetPosStr()))
-        ReportTravelTarget(requester, newTarget, oldTarget);
+    if (CanFreeMoveValue::CanFreeMoveTo(ai, newTarget->GetPosStr()))
+        ReportTravelTarget(bot, requester, newTarget, oldTarget);
 
     //If we are heading to a creature/npc clear it from the ignore list. 
     if (oldTarget && oldTarget == newTarget && newTarget->GetEntry())
@@ -133,15 +153,22 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
     RESET_AI_VALUE(ObjectGuid,"attack target");
     RESET_AI_VALUE(bool, "travel target active");
     context->ClearValues("no active travel destinations");
+    SET_AI_VALUE2(std::string, "manual string", "future travel detail", std::string());
 };
 
 //Tell the master what travel target we are moving towards.
 //This should at some point be rewritten to be denser or perhaps logic moved to ->getTitle()
-void ChooseTravelTargetAction::ReportTravelTarget(Player* requester, TravelTarget* newTarget, TravelTarget* oldTarget)
+void ChooseTravelTargetAction::ReportTravelTarget(Player* bot, Player* requester, TravelTarget* newTarget, TravelTarget* oldTarget)
 {
+    PlayerbotAI* ai = bot->GetPlayerbotAI();
+    AiObjectContext* context = ai->GetAiObjectContext();
+
     TravelDestination* destination = newTarget->GetDestination();
 
-    TravelDestination* oldDestination = oldTarget->GetDestination();
+    TravelDestination* oldDestination = nullptr;
+
+    if (oldTarget)
+        oldDestination = oldTarget->GetDestination();
 
     std::ostringstream out;
 
@@ -150,6 +177,11 @@ void ChooseTravelTargetAction::ReportTravelTarget(Player* requester, TravelTarge
         
     std::string futureTravelPurpose = AI_VALUE2(std::string, "manual string", "future travel purpose");
     std::string futureTravelPurposeName = GetTravelPurposeName(futureTravelPurpose);
+
+    std::string futureTravelCondition = AI_VALUE2(std::string, "manual string", "future travel condition");
+    bool isGuildMeeting = futureTravelCondition == "should travel named::guild meeting";
+
+    std::string futureTravelDetail = AI_VALUE2(std::string, "manual string", "future travel detail");
 
     std::string shortName = destination->GetShortName();    
 
@@ -161,20 +193,39 @@ void ChooseTravelTargetAction::ReportTravelTarget(Player* requester, TravelTarge
     }
     else
     {
-        if (bot->GetGroup() && !ai->IsGroupLeader() && (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT)))
-            out << "I want to travel ";
-        else if (newTarget->IsGroupCopy() && newTarget->GetGroupmember().GetPlayer())
-            out << "Taking " << newTarget->GetGroupmember().GetPlayer()->GetName() << " ";
-        else if (oldDestination && oldDestination == destination)
-            out << "Continuing ";
-        else
-            out << "Traveling ";
-
-        if (newTarget->GetPosition())
+        if (newTarget->GetStatus() == TravelStatus::TRAVEL_STATUS_WORK)
         {
-            out << round(newTarget->Distance(bot)) << "y";
-            if (out << " to " << newTarget->GetPosition()->getAreaName())
-                out << " to " << newTarget->GetPosition()->getAreaName();
+            out << "Currently";
+
+            if (newTarget->GetPosition() && !newTarget->GetPosition()->getAreaName().empty())
+            {
+                if (destination->DistanceTo(bot) < 100.0f)
+                    out << " in ";
+                else
+                    out << " near ";
+
+                out << newTarget->GetPosition()->getAreaName();
+            }
+            else
+                out << " traveling";
+        }
+        else
+        {
+            if (bot->GetGroup() && !ai->IsGroupLeader() && (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT)))
+                out << "I want to travel";
+            else if (newTarget->IsGroupCopy() && newTarget->GetGroupmember().GetPlayer())
+                out << "Taking " << newTarget->GetGroupmember().GetPlayer()->GetName();
+            else if (oldDestination && oldDestination == destination)
+                out << "Continuing";
+            else
+                out << "Traveling";
+
+            if (newTarget->GetPosition())
+            {
+                out << " " << round(newTarget->Distance(bot)) << "y";
+                if (!newTarget->GetPosition()->getAreaName().empty())
+                    out << " to " << newTarget->GetPosition()->getAreaName();
+            }
         }
 
         if (shortName.find("quest") == 0)
@@ -194,7 +245,7 @@ void ChooseTravelTargetAction::ReportTravelTarget(Player* requester, TravelTarge
             else if (futureTravelPurpose == "petition")
                 out << " to hand in a petition";
             else
-                out << " to roleplay with";
+                out << " to roleplay";
         }
         else
         {
@@ -207,7 +258,11 @@ void ChooseTravelTargetAction::ReportTravelTarget(Player* requester, TravelTarge
     if (out.str().empty())
         return;
 
-    ai->TellPlayerNoFacing(requester, out, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+    if (!isGuildMeeting)
+        ai->TellPlayerNoFacing(requester, out, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_TALK, false);
+
+    if (!futureTravelDetail.empty())
+        ai->TellDebug(requester, "Farming item: " + futureTravelDetail + " from " + destination->GetTitle(), "debug travel");
 
     std::string message = out.str().c_str();
 
@@ -313,7 +368,7 @@ bool ChooseTravelTargetAction::SetBestTarget(Player* requester, TravelTarget* ta
             }
             else
             {
-                ai->TellDebug(requester, "Not active: " + destination->GetTitle() + " " + std::to_string(round(destination->DistanceTo(bot))) + "y", "debug travel");
+                ai->TellDebug(requester, "Not active: " + destination->GetTitle() + " " + std::to_string((uint32)round(destination->DistanceTo(bot))) + "y", "debug travel");
             }
 
         }
@@ -332,7 +387,7 @@ std::vector<std::string> split(const std::string& s, char delim);
 char* strstri(const char* haystack, const char* needle);
 
 //Find a destination based on (part of) it's name. Includes zones, ncps and mobs. Picks the closest one that matches.
-DestinationList ChooseTravelTargetAction::FindDestination(PlayerTravelInfo info, std::string name, bool zones, bool npcs, bool quests, bool mobs, bool bosses)
+DestinationList ChooseTravelTargetAction::FindDestination(PlayerTravelInfo info, std::string name, bool zones, bool npcs, bool quests, bool mobs, bool bosses, bool gather)
 {
     DestinationList dests;
 
@@ -380,6 +435,28 @@ DestinationList ChooseTravelTargetAction::FindDestination(PlayerTravelInfo info,
     if (bosses)
     {
         for (auto& d : sTravelMgr.GetDestinations(info, (uint32)TravelDestinationPurpose::Boss, {}, false, 1000000.0f))
+        {
+            if (strstri(d->GetTitle().c_str(), name.c_str()))
+                dests.push_back(d);
+        }
+    }
+
+    //Gather
+    if (gather)
+    {
+        for (auto& d : sTravelMgr.GetDestinations(info, (uint32)TravelDestinationPurpose::GatherSkinning, {}, false, 1000000.0f))
+        {
+            if (strstri(d->GetTitle().c_str(), name.c_str()))
+                dests.push_back(d);
+        }
+
+        for (auto& d : sTravelMgr.GetDestinations(info, (uint32)TravelDestinationPurpose::GatherMining, {}, false, 1000000.0f))
+        {
+            if (strstri(d->GetTitle().c_str(), name.c_str()))
+                dests.push_back(d);
+        }
+
+        for (auto& d : sTravelMgr.GetDestinations(info, (uint32)TravelDestinationPurpose::GatherHerbalism, {}, false, 1000000.0f))
         {
             if (strstri(d->GetTitle().c_str(), name.c_str()))
                 dests.push_back(d);
@@ -565,9 +642,11 @@ bool RefreshTravelTargetAction::Execute(Event& event)
     target->IncRetry(false);
 
     RESET_AI_VALUE(bool, "travel target active");    
+    context->ClearValues("no active travel destinations");
+    SET_AI_VALUE2(std::string, "manual string", "future travel detail", std::string());
 
     ai->TellDebug(requester, "Refreshed travel target", "debug travel");
-    ReportTravelTarget(requester, target, target);
+    ReportTravelTarget(bot, requester, target, target);
 
     return false;
 }
@@ -666,7 +745,7 @@ bool RequestTravelTargetAction::isUseful() {
 
     if (!isAllowed())
     {
-        ai->TellDebug(ai->GetMaster(), "Skipped " + GetTravelPurposeName(AI_VALUE2(std::string, "manual string", "future travel purpose")) + " because of skip chance", "debug travel");
+        ai->TellDebug(ai->GetMaster(), "Skipped " + GetTravelPurposeName(qualifier) + " because of skip chance", "debug travel");
         return false;
     }
 
@@ -726,7 +805,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
 
         if (pvpLocationNumber < 20) //First 200 minutes
             WorldPvpLocation = "Tarren Mill";
-        else if(pvpLocationNumber >= 20 && pvpLocationNumber < 40) //Second 200 minutes
+        else if (pvpLocationNumber >= 20 && pvpLocationNumber < 40) //Second 200 minutes
             WorldPvpLocation = "The Barrens";
         else if (pvpLocationNumber >= 40 && pvpLocationNumber < 60) //Third 200 minutes
             WorldPvpLocation = "Silithus";
@@ -738,7 +817,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
         *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async, [travelInfo = PlayerTravelInfo(bot), center, WorldPvpLocation]()
             {
                 PartitionedTravelList list;
-                for (auto& destination : ChooseTravelTargetAction::FindDestination(travelInfo, WorldPvpLocation, true, false, false, false, false))
+                for (auto& destination : ChooseTravelTargetAction::FindDestination(travelInfo, WorldPvpLocation, true, false, false, false, false, false))
                 {
                     std::list<uint8> chancesToGoFar = { 10,50,90 }; //Closest map, grid, cell.
                     WorldPosition* point = destination->GetNextPoint(center, chancesToGoFar);
@@ -752,6 +831,364 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                 return list;
             }
         );
+    }
+    else if (travelName == "guild meeting")
+    {
+        // Parse guild MOTD for the meeting time.
+        // Meeting: <location> <start time> <end time>
+        std::string meetingLocation;
+        if (bot->GetGuildId())
+        {
+            Guild* guild = sGuildMgr.GetGuildById(bot->GetGuildId());
+            if (guild)
+            {
+                std::string motd = guild->GetMOTD();
+                auto pos = motd.find("Meeting:");
+                if (pos != std::string::npos)
+                {
+                    std::string body = motd.substr(pos + 8);
+                    body.erase(body.begin(), std::find_if(body.begin(), body.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+                    std::vector<std::string> tokens;
+                    { std::istringstream iss(body); std::string t; while (iss >> t) tokens.push_back(t); }
+                    if (tokens.size() >= 3)
+                    {
+                        tokens.pop_back(); // end time
+                        tokens.pop_back(); // start time
+                        std::ostringstream loc;
+                        for (size_t i = 0; i < tokens.size(); ++i) { if (i) loc << " "; loc << tokens[i]; }
+                        meetingLocation = loc.str();
+                    }
+                }
+            }
+        }
+
+        if (meetingLocation.empty())
+        {
+            ai->TellDebug(ai->GetMaster(), "No meeting location found in guild MOTD", "debug travel");
+            return false;
+        }
+
+        *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async, [travelInfo = PlayerTravelInfo(bot), center, meetingLocation]()
+            {
+                PartitionedTravelList list;
+                for (auto& destination : ChooseTravelTargetAction::FindDestination(travelInfo, meetingLocation, true, false, false, false, false, false))
+                {
+                    std::list<uint8> chancesToGoFar = { 10,50,90 };
+                    WorldPosition* point = destination->GetNextPoint(center, chancesToGoFar);
+
+                    if (!point)
+                        continue;
+
+                    list[0].push_back(TravelPoint(destination, point, point->distance(center)));
+                }
+
+                return list;
+            }
+        );
+    }
+    else if (travelName == "guild order")
+    {
+        GuildOrder order = AI_VALUE(GuildOrder, "guild order");
+
+        if (!order.IsTravelOrder())
+        {
+            ai->TellDebug(ai->GetMaster(), "No valid guild travel order found", "debug travel");
+            return false;
+        }
+
+        std::string orderTarget = order.target;
+
+        ai->TellDebug(ai->GetMaster(), "Guild order: " + order.GetTypeName() + " " + orderTarget, "debug travel");
+
+        if (order.type == GuildOrderType::QuestReward)
+        {
+            uint32 questId = order.questId;
+            if (!questId)
+            {
+                ai->TellDebug(ai->GetMaster(), "QuestReward order has no questId", "debug travel");
+                return false;
+            }
+
+            QuestStatus questStatus = bot->GetQuestStatus(questId);
+            bool questComplete = false;
+            bool questInProgress = false;
+
+            if (questStatus == QUEST_STATUS_COMPLETE)
+                questComplete = true;
+            else if (questStatus == QUEST_STATUS_INCOMPLETE)
+                questInProgress = true;
+
+            if (!questComplete && questStatus == QUEST_STATUS_INCOMPLETE)
+            {
+                Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+                if (quest && bot->CanRewardQuest(quest, false))
+                    questComplete = true;
+            }
+
+            std::vector<int32> objectiveEntries;
+            std::vector<int32> questGiverEntries;
+            std::vector<int32> questTakerEntries;
+
+            if (questInProgress && !questComplete)
+            {
+                Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+                if (quest)
+                {
+                    for (uint32 objective = 0; objective < QUEST_OBJECTIVES_COUNT; objective++)
+                    {
+                        std::vector<std::string> qualifier = { std::to_string(questId), std::to_string(objective) };
+                        if (!AI_VALUE2(bool, "need quest objective", Qualified::MultiQualify(qualifier, ",")))
+                            continue;
+
+                        if (quest->ReqCreatureOrGOId[objective])
+                            objectiveEntries.push_back(quest->ReqCreatureOrGOId[objective]);
+
+                        if (quest->ReqItemId[objective])
+                        {
+                            std::list<int32> dropList = GAI_VALUE2(std::list<int32>, "item drop list", quest->ReqItemId[objective]);
+                            for (int32 entry : dropList)
+                                objectiveEntries.push_back(entry);
+
+                            std::list<int32> vendorList = GAI_VALUE2(std::list<int32>, "item vendor list", quest->ReqItemId[objective]);
+                            for (int32 entry : vendorList)
+                                objectiveEntries.push_back(entry);
+                        }
+                    }
+                }
+            }
+
+            *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async,
+                [partitions = travelPartitions, travelInfo = PlayerTravelInfo(bot), center, questId,
+                questComplete, questInProgress, objectiveEntries]()
+                {
+                    PartitionedTravelList list;
+
+                    Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+                    if (!quest)
+                        return list;
+
+                    if (questComplete)
+                    {
+                        PartitionedTravelList subList = sTravelMgr.GetPartitions(center, partitions, travelInfo,
+                            (uint32)TravelDestinationPurpose::QuestTaker, {}, false, 1000000.0f);
+                        for (auto& [partition, points] : subList)
+                        {
+                            for (auto& point : points)
+                            {
+                                QuestTravelDestination* questDest = dynamic_cast<QuestTravelDestination*>(std::get<TravelDestination*>(point));
+                                if (questDest && questDest->GetQuestId() == questId)
+                                    list[partition].push_back(point);
+                            }
+                        }
+                    }
+                    else if (questInProgress && !objectiveEntries.empty())
+                    {
+                        uint32 allObjectiveFlags = (uint32)TravelDestinationPurpose::QuestAllObjective;
+                        PartitionedTravelList subList = sTravelMgr.GetPartitions(center, partitions, travelInfo,
+                            allObjectiveFlags, objectiveEntries, false, 1000000.0f);
+                        for (auto& [partition, points] : subList)
+                            list[partition].insert(list[partition].end(), points.begin(), points.end());
+
+                        if (list.empty())
+                        {
+                            subList = sTravelMgr.GetPartitions(center, partitions, travelInfo,
+                                (uint32)TravelDestinationPurpose::Grind, objectiveEntries, false, 1000000.0f);
+                            for (auto& [partition, points] : subList)
+                                list[partition].insert(list[partition].end(), points.begin(), points.end());
+                        }
+                    }
+                    else
+                    {
+                        PartitionedTravelList subList = sTravelMgr.GetPartitions(center, partitions, travelInfo,
+                            (uint32)TravelDestinationPurpose::QuestGiver, {}, false, 1000000.0f);
+                        for (auto& [partition, points] : subList)
+                        {
+                            for (auto& point : points)
+                            {
+                                QuestTravelDestination* questDest = dynamic_cast<QuestTravelDestination*>(std::get<TravelDestination*>(point));
+                                if (questDest && questDest->GetQuestId() == questId)
+                                    list[partition].push_back(point);
+                            }
+                        }
+                    }
+
+                    return list;
+                }
+            );
+
+            SET_AI_VALUE2(std::string, "manual string", "future travel detail", orderTarget);
+        }
+        else if (order.type == GuildOrderType::Farm || order.type == GuildOrderType::Kill)
+        {
+            *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async, [travelInfo = PlayerTravelInfo(bot), center, orderTarget, partitions = travelPartitions]()
+                {
+                    PartitionedTravelList list;
+
+                    uint32 foundItemId = GuildOrderValue::FindItemByName(orderTarget);
+
+                    if (foundItemId)
+                    {
+                        std::list<int32> dropEntries = GAI_VALUE2(std::list<int32>, "item drop list", foundItemId);
+
+                        if (!dropEntries.empty())
+                        {
+                            std::vector<int32> gatherEntries, mobEntries;
+                            for (int32 entry : dropEntries)
+                            {
+                                if (entry < 0)
+                                    gatherEntries.push_back(entry);
+                                else
+                                    mobEntries.push_back(entry);
+                            }
+
+                            // Check which gathering skills the bot actually has.
+                            bool hasHerbalism = travelInfo.GetCurrentSkill(SKILL_HERBALISM) > 0;
+                            bool hasMining = travelInfo.GetCurrentSkill(SKILL_MINING) > 0;
+                            bool hasSkinning = travelInfo.GetCurrentSkill(SKILL_SKINNING) > 0;
+                            bool hasAnyGathering = hasHerbalism || hasMining || hasSkinning;
+
+                            // Bot has a gathering skill: prioritize gather nodes.
+                            if (!gatherEntries.empty() && hasAnyGathering)
+                            {
+                                // Only query gather purposes the bot can actually use.
+                                if (hasHerbalism)
+                                {
+                                    PartitionedTravelList gatherList = sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::GatherHerbalism, gatherEntries, true);
+                                    for (auto& [partition, points] : gatherList)
+                                        list[partition].insert(list[partition].end(), points.begin(), points.end());
+                                }
+                                if (hasMining)
+                                {
+                                    PartitionedTravelList gatherList = sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::GatherMining, gatherEntries, true);
+                                    for (auto& [partition, points] : gatherList)
+                                        list[partition].insert(list[partition].end(), points.begin(), points.end());
+                                }
+                                if (hasSkinning)
+                                {
+                                    PartitionedTravelList gatherList = sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::GatherSkinning, gatherEntries, true);
+                                    for (auto& [partition, points] : gatherList)
+                                        list[partition].insert(list[partition].end(), points.begin(), points.end());
+                                }
+                            }
+
+                            // If entry-based gather lookup failed, try unfiltered gather by purpose
+                            // (the travel manager may index nodes by their own entry, not drop-source entry).
+                            if (list.empty() && hasAnyGathering && !gatherEntries.empty())
+                            {
+                                if (hasHerbalism)
+                                {
+                                    PartitionedTravelList gatherList = sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::GatherHerbalism);
+                                    for (auto& [partition, points] : gatherList)
+                                        list[partition].insert(list[partition].end(), points.begin(), points.end());
+                                }
+                                if (list.empty() && hasMining)
+                                {
+                                    PartitionedTravelList gatherList = sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::GatherMining);
+                                    for (auto& [partition, points] : gatherList)
+                                        list[partition].insert(list[partition].end(), points.begin(), points.end());
+                                }
+                                if (list.empty() && hasSkinning)
+                                {
+                                    PartitionedTravelList gatherList = sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::GatherSkinning);
+                                    for (auto& [partition, points] : gatherList)
+                                        list[partition].insert(list[partition].end(), points.begin(), points.end());
+                                }
+                            }
+
+                            // Fall back to mob drops only if no gather nodes were found or bot has no gathering skill.
+                            if (list.empty() && !mobEntries.empty() && !hasAnyGathering)
+                            {
+                                uint32 mobPurpose = (uint32)TravelDestinationPurpose::Grind;
+
+                                list = sTravelMgr.GetPartitions(center, partitions, travelInfo, mobPurpose, mobEntries, false);
+                            }
+                        }
+                    }
+
+                    // Fall back by name: if bot has gathering skills, try gather-only first.
+                    if (list.empty())
+                    {
+                        bool hasHerbalism = travelInfo.GetCurrentSkill(SKILL_HERBALISM) > 0;
+                        bool hasMining = travelInfo.GetCurrentSkill(SKILL_MINING) > 0;
+                        bool hasSkinning = travelInfo.GetCurrentSkill(SKILL_SKINNING) > 0;
+                        bool hasAnyGathering = hasHerbalism || hasMining || hasSkinning;
+
+                        // Try gather nodes by name first if bot can gather.
+                        if (hasAnyGathering)
+                        {
+                            for (auto& destination : ChooseTravelTargetAction::FindDestination(travelInfo, orderTarget, false, false, false, false, false, true))
+                            {
+                                std::list<uint8> chancesToGoFar = { 10,50,90 };
+                                WorldPosition* point = destination->GetNextPoint(center, chancesToGoFar);
+                                if (!point) continue;
+                                list[0].push_back(TravelPoint(destination, point, point->distance(center)));
+                            }
+                        }
+
+                        // If still empty, fall back to mobs, bosses and gather nodes.
+                        if (list.empty())
+                        {
+                            bool includeMobs = !hasAnyGathering;
+                            for (auto& destination : ChooseTravelTargetAction::FindDestination(travelInfo, orderTarget, false, includeMobs, false, includeMobs, includeMobs, true))
+                            {
+                                std::list<uint8> chancesToGoFar = { 10,50,90 };
+                                WorldPosition* point = destination->GetNextPoint(center, chancesToGoFar);
+                                if (!point) continue;
+                                list[0].push_back(TravelPoint(destination, point, point->distance(center)));
+                            }
+                        }
+                    }
+
+                    return list;
+                }
+            );
+        }
+        else if (order.type == GuildOrderType::Explore)
+        {
+            *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async, [travelInfo = PlayerTravelInfo(bot), center, orderTarget]()
+                {
+                    PartitionedTravelList list;
+                    for (auto& destination : ChooseTravelTargetAction::FindDestination(travelInfo, orderTarget, true, false, false, false, false, false))
+                    {
+                        std::list<uint8> chancesToGoFar = { 10,50,90 };
+                        WorldPosition* point = destination->GetNextPoint(center, chancesToGoFar);
+                        if (!point) continue;
+                        list[0].push_back(TravelPoint(destination, point, point->distance(center)));
+                    }
+
+                    return list;
+                }
+            );
+        }
+        else if (order.type == GuildOrderType::AuctionHouse)
+        {
+            *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async, [partitions = travelPartitions, travelInfo = PlayerTravelInfo(bot), center]()
+                {
+                    PartitionedTravelList list = sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::GenericRpg);
+
+                    for (auto& [partition, travelPoints] : list)
+                    {
+                        travelPoints.erase(std::remove_if(travelPoints.begin(), travelPoints.end(), [](TravelPoint point)
+                            {
+                                EntryTravelDestination* dest = (EntryTravelDestination*)std::get<TravelDestination*>(point);
+                                if (!dest->GetCreatureInfo())
+                                    return true;
+
+                                if (dest->GetCreatureInfo()->NpcFlags & UNIT_NPC_FLAG_AUCTIONEER)
+                                    return false;
+
+                                return true;
+                            }), travelPoints.end());
+                    }
+                    return list;
+                });
+        }
+        else
+        {
+            return false;
+        }
+
+        SET_AI_VALUE2(std::string, "manual string", "future travel detail", orderTarget);
     }
     else if (travelName.find("trainer") == 0)
     {
@@ -792,11 +1229,35 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                 return sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::Vendor, entries, false);
             });
     }
+    else if (travelName == "reagent vendor")
+    {
+        std::set<int32> reagentVendorEntrySet;
+        std::vector<uint32> missingReagents = NeedsProfessionReagentsValue::GetMissingReagents(ai);
+        for (uint32 reagentId : missingReagents)
+        {
+            std::list<int32> vendorEntries = GAI_VALUE2(std::list<int32>, "item vendor list", reagentId);
+            for (int32 entry : vendorEntries)
+                reagentVendorEntrySet.insert(entry);
+        }
+
+        std::vector<int32> reagentVendorEntries(reagentVendorEntrySet.begin(), reagentVendorEntrySet.end());
+
+        if (reagentVendorEntries.empty())
+        {
+            ai->TellDebug(ai->GetMaster(), "No reagent vendor entries found", "debug travel");
+            return false;
+        }
+
+        *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async, [entries = reagentVendorEntries, partitions = travelPartitions, travelInfo = PlayerTravelInfo(bot), center]()
+            {
+                return sTravelMgr.GetPartitions(center, partitions, travelInfo, (uint32)TravelDestinationPurpose::Vendor, entries, false);
+            });
+    }
     else
     {
         uint32 useFlags;
-        
-        if(travelName == "city")
+
+        if (travelName == "city")
             useFlags = NPCFlags::UNIT_NPC_FLAG_BANKER | NPCFlags::UNIT_NPC_FLAG_BATTLEMASTER | NPCFlags::UNIT_NPC_FLAG_AUCTIONEER;
         else if (travelName == "tabard")
             useFlags = NPCFlags::UNIT_NPC_FLAG_TABARDDESIGNER;
@@ -828,7 +1289,10 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
 
     AI_VALUE(TravelTarget*, "travel target")->SetStatus(TravelStatus::TRAVEL_STATUS_PREPARE);
     SET_AI_VALUE2(std::string, "manual string", "future travel purpose", getQualifier());
-    SET_AI_VALUE2(std::string, "manual string", "future travel condition", event.getSource());
+    SET_AI_VALUE2(std::string, "manual string", "future travel condition",
+        travelName == "guild meeting" ? "should travel named::guild meeting" :
+        travelName == "guild order" ? "should travel named::guild order" :
+        event.getSource());
     SET_AI_VALUE2(int, "manual int", "future travel relevance", relevance * 100);
 
     return true;
@@ -849,6 +1313,12 @@ bool RequestNamedTravelTargetAction::isAllowed() const
             return false;
         return true;
     }
+    else if (name == "guild meeting")
+        return true;
+    else if (name == "reagent vendor")
+        return true;
+    else if (name == "guild order")
+        return true;
     else if (name == "mount")
     {
         if (urand(1, 100) > 100)
@@ -967,6 +1437,9 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
 
 bool RequestQuestTravelTargetAction::isAllowed() const
 {
+    if (AI_VALUE2(bool, "manual bool", "is running test") || AI_VALUE(bool, "has focus travel target"))
+        return true;
+
     if (AI_VALUE(bool, "should get money"))
         return urand(1, 100) < 90;
     else

@@ -13,6 +13,8 @@
 #include "playerbot/TravelMgr.h"
 #include "SayAction.h"
 #include "playerbot/PlayerbotLLMInterface.h"
+#include "BankAction.h"
+#include "GuildBankAction.h"
 
 
 using namespace ai;
@@ -210,7 +212,7 @@ bool RpgTaxiAction::Execute(Event& event)
     bot->ResolvePendingMount();
 #endif
 
-    sLog.outString("Bot #%d <%s> is flying from %s to %s (%zu location available)", bot->GetGUIDLow(), bot->GetName(), nodeFrom->name[0], nodeTo->name[0], nodes.size());
+    sLog.outDetail("Bot #%d <%s> is flying from %s to %s (%zu location available)", bot->GetGUIDLow(), bot->GetName(), nodeFrom->name[0], nodeTo->name[0], nodes.size());
     bot->SetMoney(money);
 
     rpg->AfterExecute();
@@ -758,6 +760,9 @@ bool RpgEnchantAction::Execute(Event& event)
     if (!player)
         return false;
 
+    if (!ai->IsSafe(player))
+        return false;
+
     std::list<Item*> items = AI_VALUE(std::list<Item*>, "items useful to enchant");
 
     if (items.empty())
@@ -933,3 +938,73 @@ bool RpgSpellClickAction::Execute(Event& event)
     
     return result;
 }
+
+bool RpgBankDepositAction::Execute(Event& event)
+{
+    rpg->BeforeExecute();
+
+    BankAction bankAction(ai);
+    bool result = bankAction.AutoDeposit();
+
+    rpg->AfterExecute(result, true);
+    DoDelay();
+    return result;
+}
+
+bool RpgBankWithdrawAction::Execute(Event& event)
+{
+    rpg->BeforeExecute();
+
+    BankAction bankAction(ai);
+    bool result = bankAction.AutoWithdraw();
+
+    if (result)
+        ai->DoSpecificAction("equip upgrades", event, true);
+
+    rpg->AfterExecute(result, true);
+    DoDelay();
+    return result;
+}
+
+#ifndef MANGOSBOT_ZERO
+bool RpgGuildBankDepositAction::Execute(Event& event)
+{
+    rpg->BeforeExecute();
+
+    GuidPosition guidP = rpg->guidP();
+    GameObject* go = guidP.IsGameObject() ? guidP.GetGameObject(bot->GetInstanceId()) : nullptr;
+
+    bool result = false;
+    if (go)
+    {
+        GuildBankAction guildBankAction(ai);
+        result = guildBankAction.AutoDeposit(go);
+    }
+
+    rpg->AfterExecute(result, true);
+    DoDelay();
+    return result;
+}
+
+bool RpgGuildBankWithdrawAction::Execute(Event& event)
+{
+    rpg->BeforeExecute();
+
+    GuidPosition guidP = rpg->guidP();
+    GameObject* go = guidP.IsGameObject() ? guidP.GetGameObject(bot->GetInstanceId()) : nullptr;
+
+    bool result = false;
+    if (go)
+    {
+        GuildBankAction guildBankAction(ai);
+        result = guildBankAction.AutoWithdraw(go);
+
+        if (result)
+            ai->DoSpecificAction("equip upgrades", event, true);
+    }
+
+    rpg->AfterExecute(result, true);
+    DoDelay();
+    return result;
+}
+#endif

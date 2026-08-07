@@ -11,6 +11,34 @@ bool MeleeAction::isUseful()
     if (ai->IsInVehicle() && !ai->IsInVehicle(false, false, true))
         return false;
 
+    Unit* target = GetTarget();
+
+    if (target)
+    {
+        // If the target has a damage shield, melee action not useful and we should actually stop attacking
+        std::set<Aura*> alreadyDone;
+        Unit::AuraList const& vDamageShields = target->GetAurasByType(SPELL_AURA_DAMAGE_SHIELD);
+        for (Unit::AuraList::const_iterator i = vDamageShields.begin(); i != vDamageShields.end();)
+        {
+            if (alreadyDone.find(*i) == alreadyDone.end())
+            {
+                alreadyDone.insert(*i);
+                uint32 damage = (*i)->GetModifier()->m_amount;
+
+                // If the damage shield does at least 10% of our max hp on each hit we do, we shouldn't melee
+                if (damage >= bot->GetMaxHealth() * 0.10f)
+                {
+                    bot->AttackStop();
+                    return false;
+                }
+
+                i = vDamageShields.begin();
+            }
+            else
+                ++i;
+        }
+    }
+
     return true;
 }
 
@@ -402,16 +430,16 @@ bool SetPetAction::Execute(Event& event)
         {
             // Send pet action packet
             const ObjectGuid& petGuid = pet->GetObjectGuid();
-            const ObjectGuid& targetGuid = ObjectGuid();
             const uint8 flag = ACT_REACTION;
             const uint32 spellId = REACT_AGGRESSIVE;
-            const uint32 command = (flag << 24) | spellId;
+            const uint32 data = (flag << 24) | spellId;
 
-            WorldPacket data(CMSG_PET_ACTION);
-            data << petGuid;
-            data << command;
-            data << targetGuid;
-            bot->GetSession()->HandlePetAction(data);
+            WorldPacket packet(CMSG_PET_ACTION);
+            packet << petGuid;
+            packet << data;
+            packet << uint64(0);
+            bot->GetSession()->HandlePetAction(packet);
+            bot->PetSpellInitialize();
 
             ai->TellPlayer(requester, "Setting pet to aggressive mode");
             return true;
@@ -420,16 +448,16 @@ bool SetPetAction::Execute(Event& event)
         {
             // Send pet action packet
             const ObjectGuid& petGuid = pet->GetObjectGuid();
-            const ObjectGuid& targetGuid = ObjectGuid();
             const uint8 flag = ACT_REACTION;
             const uint32 spellId = REACT_DEFENSIVE;
-            const uint32 command = (flag << 24) | spellId;
+            const uint32 data = (flag << 24) | spellId;
 
-            WorldPacket data(CMSG_PET_ACTION);
-            data << petGuid;
-            data << command;
-            data << targetGuid;
-            bot->GetSession()->HandlePetAction(data);
+            WorldPacket packet(CMSG_PET_ACTION);
+            packet << petGuid;
+            packet << data;
+            packet << uint64(0);
+            bot->GetSession()->HandlePetAction(packet);
+            bot->PetSpellInitialize();
 
             ai->TellPlayer(requester, "Setting pet to defensive mode");
             return true;
@@ -438,16 +466,16 @@ bool SetPetAction::Execute(Event& event)
         {
             // Send pet action packet
             const ObjectGuid& petGuid = pet->GetObjectGuid();
-            const ObjectGuid& targetGuid = ObjectGuid();
             const uint8 flag = ACT_REACTION;
             const uint32 spellId = REACT_PASSIVE;
-            const uint32 command = (flag << 24) | spellId;
+            const uint32 data = (flag << 24) | spellId;
 
-            WorldPacket data(CMSG_PET_ACTION);
-            data << petGuid;
-            data << command;
-            data << targetGuid;
-            bot->GetSession()->HandlePetAction(data);
+            WorldPacket packet(CMSG_PET_ACTION);
+            packet << petGuid;
+            packet << data;
+            packet << uint64(0);
+            bot->GetSession()->HandlePetAction(packet);
+            bot->PetSpellInitialize();
 
             ai->TellPlayer(requester, "Setting pet to passive mode");
             return true;
@@ -492,6 +520,16 @@ bool SetPetAction::Execute(Event& event)
         {
             if (requester->GetTarget())
             {
+                constexpr uint32 PET_IMP = 416;
+                constexpr uint32 PHASE_SHIFT = 4511;
+                if (bot->getClass() == CLASS_WARLOCK &&
+                    pet->AI() && pet->AI()->HasReactState(REACT_PASSIVE) &&
+                    pet->GetEntry() == PET_IMP && pet->HasAura(PHASE_SHIFT))
+                {
+                    ai->TellPlayer(requester, "Pet has Phase Shift active, cannot attack");
+                    return false;
+                }
+
                 // Send pet action packet
                 const ObjectGuid& petGuid = pet->GetObjectGuid();
                 const ObjectGuid& targetGuid = requester->GetTarget()->GetObjectGuid();
@@ -551,6 +589,29 @@ bool SetPetAction::Execute(Event& event)
                 ai->TellPlayer(requester, "Dismissing pet");
 
                 return true;
+            }
+        }
+        else if (command == "abandon")
+        {
+            if (bot->getClass() == CLASS_HUNTER)
+            {
+                //std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_PET_ABANDON, 8));
+                //*packet << pet->GetObjectGuid();
+                //bot->GetSession()->QueuePacket(std::move(packet));
+
+                // Send pet action packet
+                const ObjectGuid& petGuid = pet->GetObjectGuid();
+
+                WorldPacket packet(CMSG_PET_ABANDON);
+                packet << petGuid;
+
+                bot->GetSession()->HandlePetAbandon(packet);
+
+                return true;
+            }
+            else
+            {
+                ai->TellPlayer(requester, "Please specify a pet command (Like autocast).");
             }
         }
         else

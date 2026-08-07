@@ -11,6 +11,14 @@ typedef std::set<uint32> SpellIds;
 
 namespace ai
 {
+    enum BotRoles
+    {
+        BOT_ROLE_NONE = 0x00,
+        BOT_ROLE_TANK = 0x01,
+        BOT_ROLE_HEALER = 0x02,
+        BOT_ROLE_DPS = 0x04
+    };
+
     class ItemQualifier;
 
     class WorldPosition;
@@ -36,6 +44,7 @@ namespace ai
         static std::string formatItem(ItemPrototype const * proto, int count = 0, int total = 0);
         static std::string formatItem(Item* item, int count = 0, int total = 0);
         static std::string formatQItem(uint32 itemId);
+        static std::string formatSlot(uint8 slotId);
         static std::string formatSkill(uint32 skillId, Player* player = nullptr);
         static std::string formatReaction(ReputationRank rank, Player* player = nullptr);
         static std::string formatFaction(uint32 factionId, Player* player = nullptr);
@@ -68,15 +77,28 @@ namespace ai
         static std::string formatChat(ChatMsg chat);
         static ChatMsg parseChat(const std::string& text);
 
+        static BotRoles parseRole(const std::string& text);
+        static std::string formatRole(BotRoles role);
+
         static std::string specName(const Player* player);
+
+        static uint32 parseGender(const std::string& text);
+        static std::string formatGender(uint8 gender);
+
+        static Team parseTeam(const std::string& text);
+        static std::string formatTeam(Team team);
+
+        static uint32 parseClass(const std::string& text);
         static std::string formatClass(const Player* player, int spec);
         static std::string formatClass(uint8 cls);
 
+        static uint32 parseRace(const std::string& text);
         static std::string formatRace(uint8 race);
+
         static std::string formatFactionName(uint32 factionId);
 
         static std::string getSkillName(uint32 skill);
-        uint32 parseSkillName(const std::string& text);
+        static uint32 parseSkillName(const std::string& text);
 
         static std::string formatAngle(float angle);
         static std::string formatWorldPosition(const WorldPosition& pos, const WorldPosition refPos = WorldPosition());

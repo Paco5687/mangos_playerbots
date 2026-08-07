@@ -157,6 +157,9 @@ bool ConfirmQuestAction::Execute(Event& event)
     uint32 quest;
     p >> quest;
     Quest const* qInfo = sObjectMgr.GetQuestTemplate(quest);
+    
+    if (!qInfo)
+        return false;
 
     quest = qInfo->GetQuestId();
     if( !bot->CanTakeQuest( qInfo, false ) )
@@ -168,7 +171,10 @@ bool ConfirmQuestAction::Execute(Event& event)
 
     if( bot->CanAddQuest( qInfo, false ) )
     {
-        bot->AddQuest( qInfo, requester );
+        if (qInfo->HasQuestFlag(QUEST_FLAGS_PARTY_ACCEPT))
+            bot->AddQuest(qInfo, nullptr); //prevent double dbscript call if player is doing it
+        else
+            bot->AddQuest( qInfo, requester );
 
         if( bot->CanCompleteQuest( quest ) )
             bot->CompleteQuest( quest );

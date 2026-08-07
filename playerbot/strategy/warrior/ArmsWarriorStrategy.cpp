@@ -24,7 +24,7 @@ private:
 
     ACTION_NODE_A(death_wish, "death wish", "bloodrage");
 
-    ACTION_NODE_A(piercing_howl, "piercing howl", "mocking blow");
+    ACTION_NODE_A(piercing_howl, "piercing howl", "hamstring");
 
     ACTION_NODE_A(mocking_blow, "mocking blow", "hamstring");
 
@@ -185,6 +185,9 @@ void ArmsWarriorAoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigger
         "melee light aoe",
         NextAction::array(0, new NextAction("whirlwind", ACTION_HIGH + 4), NULL)));
 
+    triggers.push_back(new TriggerNode(
+        "melee high aoe",
+        NextAction::array(0, new NextAction("retaliation", ACTION_HIGH + 5), NULL)));
 }
 
 void ArmsWarriorAoeStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

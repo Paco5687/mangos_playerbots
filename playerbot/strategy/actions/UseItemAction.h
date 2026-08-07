@@ -6,10 +6,22 @@
 namespace ai
 {
     //This class bypasses the requirement for a bot to have a key item in their inventory when opening a lock.
-    class BotUseItemSpell : public Spell 
+    class BotUseItemSpell : public Spell
     {
     public:
         BotUseItemSpell(WorldObject* caster, SpellEntry const* info, uint32 triggeredFlags, ObjectGuid originalCasterGUID = ObjectGuid(), SpellEntry const* triggeredBy = nullptr, bool itemCheats = false) : Spell(caster, info, triggeredFlags, originalCasterGUID, triggeredBy), itemCheats(itemCheats) {};
+
+        static BotUseItemSpell* Create(WorldObject* caster, SpellEntry const* info, uint32 triggeredFlags, ObjectGuid originalCasterGUID = ObjectGuid(), SpellEntry const* triggeredBy = nullptr, bool itemCheats = false)
+        {
+            if (!caster || !info)
+                return nullptr;
+
+            if (info != sSpellTemplate.LookupEntry<SpellEntry>(info->Id))
+                return nullptr;
+
+            return new BotUseItemSpell(caster, info, triggeredFlags, originalCasterGUID, triggeredBy, itemCheats);
+        }
+
         SpellCastResult ForceSpellStart(SpellCastTargets const* targets, Aura* triggeredByAura = nullptr);
         bool OpenLockCheck();
 
@@ -274,6 +286,32 @@ namespace ai
         uint32 GetItemId() override { return 11951; }
     };
 
+    class UseAntiVenomAction : public UseItemIdAction
+    {
+    public:
+        UseAntiVenomAction(PlayerbotAI* ai) : UseItemIdAction(ai, "anti-venom") {}
+
+        bool isUseful() override
+        {
+            if (!UseItemIdAction::isUseful())
+                return false;
+
+            return ai->HasAuraToDispel(bot, DISPEL_POISON);
+        }
+
+        uint32 GetItemId() override
+        {
+            int firstAidSkillValue = bot->GetSkillValue(129);
+            if (firstAidSkillValue >= 300 && bot->HasItemCount(19440, 1))
+                return 19440;
+            if (firstAidSkillValue >= 130 && bot->HasItemCount(6453, 1))
+                return 6453;
+            if (firstAidSkillValue >= 80 && bot->HasItemCount(6452, 1))
+                return 6452;
+            return 0;
+        }
+    };
+
     class UseRandomRecipeAction : public UseAction
     {
     public:
@@ -457,6 +495,10 @@ namespace ai
                     return false;
                 }
             }
+
+            // Do not use consumable if bot can heal self
+            if (ai->IsHeal(bot) && ai->GetManaPercent() > 20)
+                return false;
 
             return true;
         }

@@ -70,6 +70,15 @@ AiPlayerbot.RandomBotAccountCount = 200
 # (0-1), default 0
 # AiPlayerbot.DisableActivityPriorities = 0
 
+# Force bots to become active when a player is nearby
+#AiPlayerbot.ForceActiveWhenNearPlayer = 0
+
+# Force bots to become active when guild orders are enabled
+#AiPlayerbot.GuildOrderAlwaysActive = 1
+
+# Limit combat activity for slight performance boost.
+#AiPlayerbot.LimitCombatActivity = 0
+
 # Percentage of fully active bots. Default is 10, higher numbers may affect performance
 # AiPlayerbot.botActiveAlone = 10
 
@@ -77,6 +86,10 @@ AiPlayerbot.RandomBotAccountCount = 200
 # AiPlayerbot.SyncLevelWithPlayers = 0
 # AiPlayerbot.SyncLevelMaxAbove = 5
 # AiPlayerbot.SyncLevelNoPlayer = 1
+
+# Sync non-random bot alt levels to master level automatically
+# When enabled, bot alts will level up one level at a time to match their master's level
+# AiPlayerbot.SyncAltLevelToMaster = 0
 
 # Random bot guild count
 AiPlayerbot.RandomBotGuildCount = 20
@@ -128,6 +141,12 @@ AiPlayerbot.RandomGearTabardsUnobtainable = 0
 # List of item IDs to exclude from random gear, separated by comma
 AiPlayerbot.RandomGearBlacklist = 0
 
+# Roll need on items if slot is empty or broken, even if not appropriate for bot's spec
+# Bots without real player master ignore this config and always roll need in that case
+# 1 - roll need on such items
+# 0 - roll greed on such items (Default)
+AiPlayerbot.RollBadItemsWithPlayer = 0
+
 # Chance random bot has max level on first randomize (default 0.15)
 AiPlayerbot.RandomBotMaxLevelChance = 0.15
 
@@ -142,6 +161,9 @@ AiPlayerbot.RandomBotRpgChance = 0.20
 
 # Limit whithin what distance between other bots they teleport to points in zones around real player
 # AiPlayerbot.RandomBotTeleportNearPlayerMaxAmountRadius = 0
+
+# Bot transport use style: 0 = walk on transports (currently not available), 1 = teleport on transports and ride it, 2 = teleport from dock to dock bypassing transport.
+# AiPlayerbot.TransportTeleportType = 2
 
 # Chance for bot to use potions
 #AiPlayerbot.UsePotionChance = 1.0
@@ -333,6 +355,10 @@ AiPlayerbot.AutoPickReward = yes
 # Default: 0 (disabled)
 AiPlayerbot.AutoEquipUpgradeLoot = 1
 
+# Bots enchant upgrades automatically
+# Default: 0 (disabled)
+AiPlayerbot.AutoEnchantUpgradeLoot = 0
+
 # Sync quests with player (Bots will complete quests the moment you hand them in. Bots will ignore looting quest items.)
 # Default: 0 (disabled)
 AiPlayerbot.SyncQuestWithPlayer = 0
@@ -358,6 +384,9 @@ AiPlayerbot.AutoLearnDroppedSpells = 0
 # Random Bots will pick quests on their own and try to complete
 # Default: 1 (enabled)
 # AiPlayerbot.AutoDoQuests = 1
+
+# Random Bots will also move to destinations when not seen by the player
+# AiPlayerbot.EnableMinimalMove = 1
 
 ##################################################################################
 #                                                                                #
@@ -506,16 +535,28 @@ AiPlayerbot.PremadeSpecName.1.5 = pvp prot
 AiPlayerbot.PremadeSpecLink.1.5.60 = 05003--55255113032021251
 
 AiPlayerbot.PremadeSpecName.1.6 = fury slam
-AiPlayerbot.PremadeSpecLink.1.5.60 = 30305001322-05050005005510051
+AiPlayerbot.PremadeSpecLink.1.6.60 = 30305001322-05050005005510051
 
 AiPlayerbot.PremadeSpecName.1.7 = arms axes
-AiPlayerbot.PremadeSpecLink.1.5.60 = 303050213525100001-05050005005
+AiPlayerbot.PremadeSpecLink.1.7.60 = 303050213525100001-05050005005
 AiPlayerbot.PremadeSpecName.1.8 = arms maces
-AiPlayerbot.PremadeSpecLink.1.5.60 = 303050213520150001-05050005005
+AiPlayerbot.PremadeSpecLink.1.8.60 = 303050213520150001-05050005005
 AiPlayerbot.PremadeSpecName.1.9 = arms swords
-AiPlayerbot.PremadeSpecLink.1.5.60 = 303050213520105001-05050005005
+AiPlayerbot.PremadeSpecLink.1.9.60 = 303050213520105001-05050005005
 AiPlayerbot.PremadeSpecName.1.10 = arms polearms
-AiPlayerbot.PremadeSpecLink.1.5.60 = 303050213520100501-05050005005
+AiPlayerbot.PremadeSpecLink.1.10.60 = 303050213520100501-05050005005
+
+AiPlayerbot.PremadeSpecName.1.11 = furyprot
+AiPlayerbot.PremadeSpecLink.1.11.60 = -05050005505010051-502501105
+AiPlayerbot.PremadeSpecName.1.12 = furyprot (slam)
+AiPlayerbot.PremadeSpecLink.1.12.60 = -05500005005510051-502501105
+AiPlayerbot.PremadeSpecName.1.13 = furyprot (demo shout)
+AiPlayerbot.PremadeSpecLink.1.13.60 = -05500005505010051-502501105
+
+AiPlayerbot.PremadeSpecName.1.14 = 2h fury
+AiPlayerbot.PremadeSpecLink.1.14.60 = 3500502103-05050005505010051
+AiPlayerbot.PremadeSpecName.1.15 = fury no deep wounds
+AiPlayerbot.PremadeSpecLink.1.15.60 = 05005001-05053125525010051
 
 # Paladin
 AiPlayerbot.PremadeSpecName.2.0 = pve dps ret (basic ret)
@@ -828,6 +869,9 @@ AiPlayerbot.FleeingEnabled = 1
 #AiPlayerbot.ReactStrategies = 
 #AiPlayerbot.DeadStrategies = 
 
+# Toggle offheal and offdps strategies for hybrid classes.
+#AiPlayerbot.EnableOffSpecStrategies = 1
+
 # Quest items to leave (do not destroy)
 #AiPlayerbot.RandomBotQuestItems = 6948,5175,5176,5177,5178,16309,12382,13704,11000
 
@@ -846,15 +890,14 @@ AiPlayerbot.FleeingEnabled = 1
 #AiPlayerbot.OpenGoSpell = 6477
 
 # Intervals
-AiPlayerbot.RandomBotUpdateInterval = 1
+#AiPlayerbot.RandomBotUpdateInterval = 1000
+#AiPlayerbot.RandomBotsMaxLoginsPerInterval = 10
 AiPlayerbot.RandomBotCountChangeMinInterval = 1800
 AiPlayerbot.RandomBotCountChangeMaxInterval = 7200
 #AiPlayerbot.MinRandomBotInWorldTime = 3600
 #AiPlayerbot.MaxRandomBotInWorldTime = 1209600
 #AiPlayerbot.MinRandomBotRandomizeTime = 7200
 #AiPlayerbot.MaxRandomRandomizeTime = 1209600
-#AiPlayerbot.RandomBotsPerInterval = 3
-#AiPlayerbot.RandomBotsMaxLoginsPerInterval = 30
 #AiPlayerbot.MinRandomBotsPriceChangeInterval = 7200
 #AiPlayerbot.MaxRandomBotsPriceChangeInterval = 172800
 
@@ -914,6 +957,12 @@ AiPlayerbot.JumpChase = 1
 # Allow knockbacks work on bots
 AiPlayerbot.UseKnockback = 1
 
+# Set 'wander' as a default following strategy instead of 'follow' (Bots have freedom to move around while near master)
+#AiPlayerbot.UseWanderAsDefaultFollowStrategy = 1
+
+# Default bot formation
+#AiPlayerbot.DefaultFormation = near
+
 # Debug switches
 #AiPlayerbot.SpellDump = 0
 #AiPlayerbot.LogInGroupOnly = 1
@@ -934,9 +983,6 @@ AiPlayerbot.PerfMonEnabled = 0
 
 # Instant randomize: Force randombots to randomize on initial login.
 # AiPlayerbot.InstantRandomize = 0
-
-# Percentage of (min) bots online that speeds up login speed by 2x.
-# AiPlayerbot.LoginBoostPercentage = 90
 
 # Bot cheats. Same as "/w <bot> cheat (+/-/?) <cheatcode>" but only globally for all bots.
 # Values: taxi            (all nodes learned)
@@ -1021,6 +1067,20 @@ AiPlayerbot.PerfMonEnabled = 0
 # AiPlayerbot.LLMResponseDeletePattern = (\\n|<sender name>:|\\[^ ]+)
 # Step4: What pattern the server should look for to split the repsonse in multiple lines. Note only lines that follow this pattern will be extracted.
 # AiPlayerbot.LLMResponseSplitPattern = (\*.*?\*)|(\[.*?\])|(\'.*\')|([^\*\[\] ][^\*\[\]]+?[.?!])
+
+# The file llm_character_card.txt allows you to define how individual bots speak. You need to create this file in the root folder.
+# Each new line adds an additional prompt to the specified bot, which can be used to adjust specific bot's personality and speaking style.
+# The format must be as follows:
+# name1::text1
+# name2::text2
+# name3::text3
+
+# Examples:
+# Celguar::I am the Keeper of the Source.
+# Mostlikely::I like to travel a lot.
+# Flekz::I hold the power of ancient wizardry.
+
+AiPlayerbot.LLMDefaultPromptsFile = llm_character_card.txt
 
 # Should previous conversations from all channels be mixed?
 # AiPlayerbot.LLMGlobalContext = 0
@@ -2569,25 +2629,25 @@ AiPlayerbot.GearProgressionSystem.2.4.1.18 = 5976	# Tabard
 
 # Level 2 (2) Rogue (4) Subtlety (2)
 # https://www.wowhead.com/classic/gear-planner/rogue/orc/AjwAAVX1AkfkA0G3BVX5BkG7BzrWCFXzCVX0CjrXC0KnDEmFDS4nDjaND0htEEKzEUmQEkKt
-AiPlayerbot.GearProgressionSystem.2.4.1.0 = 22005	# Head
-AiPlayerbot.GearProgressionSystem.2.4.1.1 = 18404	# Neck
-AiPlayerbot.GearProgressionSystem.2.4.1.2 = 16823	# Shoulder
-AiPlayerbot.GearProgressionSystem.2.4.1.3 = 0		# Shirt
-AiPlayerbot.GearProgressionSystem.2.4.1.4 = 22009	# Chest
-AiPlayerbot.GearProgressionSystem.2.4.1.5 = 16827	# Waist
-AiPlayerbot.GearProgressionSystem.2.4.1.6 = 15062	# Legs
-AiPlayerbot.GearProgressionSystem.2.4.1.7 = 22003	# Feet
-AiPlayerbot.GearProgressionSystem.2.4.1.8 = 22004	# Wrists
-AiPlayerbot.GearProgressionSystem.2.4.1.9 = 15063	# Hands
-AiPlayerbot.GearProgressionSystem.2.4.1.10 = 17063	# Finger 1
-AiPlayerbot.GearProgressionSystem.2.4.1.11 = 18821	# Finger 2
-AiPlayerbot.GearProgressionSystem.2.4.1.12 = 11815	# Trinket 1
-AiPlayerbot.GearProgressionSystem.2.4.1.13 = 13965	# Trinket 2
-AiPlayerbot.GearProgressionSystem.2.4.1.14 = 18541	# Back
-AiPlayerbot.GearProgressionSystem.2.4.1.15 = 17075	# Main Hand
-AiPlayerbot.GearProgressionSystem.2.4.1.16 = 18832	# Off Hand
-AiPlayerbot.GearProgressionSystem.2.4.1.17 = 17069	# Ranged
-AiPlayerbot.GearProgressionSystem.2.4.1.18 = 5976	# Tabard
+AiPlayerbot.GearProgressionSystem.2.4.2.0 = 22005	# Head
+AiPlayerbot.GearProgressionSystem.2.4.2.1 = 18404	# Neck
+AiPlayerbot.GearProgressionSystem.2.4.2.2 = 16823	# Shoulder
+AiPlayerbot.GearProgressionSystem.2.4.2.3 = 0		# Shirt
+AiPlayerbot.GearProgressionSystem.2.4.2.4 = 22009	# Chest
+AiPlayerbot.GearProgressionSystem.2.4.2.5 = 16827	# Waist
+AiPlayerbot.GearProgressionSystem.2.4.2.6 = 15062	# Legs
+AiPlayerbot.GearProgressionSystem.2.4.2.7 = 22003	# Feet
+AiPlayerbot.GearProgressionSystem.2.4.2.8 = 22004	# Wrists
+AiPlayerbot.GearProgressionSystem.2.4.2.9 = 15063	# Hands
+AiPlayerbot.GearProgressionSystem.2.4.2.10 = 17063	# Finger 1
+AiPlayerbot.GearProgressionSystem.2.4.2.11 = 18821	# Finger 2
+AiPlayerbot.GearProgressionSystem.2.4.2.12 = 11815	# Trinket 1
+AiPlayerbot.GearProgressionSystem.2.4.2.13 = 13965	# Trinket 2
+AiPlayerbot.GearProgressionSystem.2.4.2.14 = 18541	# Back
+AiPlayerbot.GearProgressionSystem.2.4.2.15 = 17075	# Main Hand
+AiPlayerbot.GearProgressionSystem.2.4.2.16 = 18832	# Off Hand
+AiPlayerbot.GearProgressionSystem.2.4.2.17 = 17069	# Ranged
+AiPlayerbot.GearProgressionSystem.2.4.2.18 = 5976	# Tabard
 
 # Level 2 (2) Priest (5) Discipline (0)
 # https://www.wowhead.com/classic/gear-planner/priest/dwarf/BDwAAAEAQhkCAE2tAwBBsAUAN0oGAEGxBwBBrggAQasJAEGzCgBBrAsASsQMAFc-DQBIJQ4ASYQPAEhOEABIsBIAVu4
@@ -3308,7 +3368,7 @@ AiPlayerbot.GearProgressionSystem.3.7.1.5 = 19380	# Waist
 AiPlayerbot.GearProgressionSystem.3.7.1.6 = 15062	# Legs
 AiPlayerbot.GearProgressionSystem.3.7.1.7 = 19381	# Feet
 AiPlayerbot.GearProgressionSystem.3.7.1.8 = 18812	# Wrists
-AiPlayerbot.GearProgressionSystem.2.7.1.9 = 19157	# Hands
+AiPlayerbot.GearProgressionSystem.3.7.1.9 = 19157	# Hands
 AiPlayerbot.GearProgressionSystem.3.7.1.10 = 19384	# Finger 1
 AiPlayerbot.GearProgressionSystem.3.7.1.11 = 18821	# Finger 2
 AiPlayerbot.GearProgressionSystem.3.7.1.12 = 19406	# Trinket 1
@@ -4187,25 +4247,25 @@ AiPlayerbot.GearProgressionSystem.5.MaxItemLevel = 100
 
 # Level 5 (5) Warrior (1) Arms (0)
 # https://www.wowhead.com/classic/gear-planner/warrior/tauren/AjwAATFgAloNA1NSBVnYBlqzB1ocCEu7CVmYClRNC1n-DFStDUvODloBD1oFEFoOEVwZElkb
-AiPlayerbot.GearProgressionSystem.5.1.1.0 = 12640 	# Head
-AiPlayerbot.GearProgressionSystem.5.1.1.1 = 23053	# Neck
-AiPlayerbot.GearProgressionSystem.5.1.1.2 = 21330	# Shoulder
-AiPlayerbot.GearProgressionSystem.5.1.1.3 = 0		# Shirt
-AiPlayerbot.GearProgressionSystem.5.1.1.4 = 23000	# Chest
-AiPlayerbot.GearProgressionSystem.5.1.1.5 = 23219	# Waist
-AiPlayerbot.GearProgressionSystem.5.1.1.6 = 23068	# Legs
-AiPlayerbot.GearProgressionSystem.5.1.1.7 = 19387	# Feet
-AiPlayerbot.GearProgressionSystem.5.1.1.8 = 22936	# Wrists
-AiPlayerbot.GearProgressionSystem.5.1.1.9 = 21581	# Hands
-AiPlayerbot.GearProgressionSystem.5.1.1.10 = 23038	# Finger 1
-AiPlayerbot.GearProgressionSystem.5.1.1.11 = 21677	# Finger 2
-AiPlayerbot.GearProgressionSystem.5.1.1.12 = 19406	# Trinket 1
-AiPlayerbot.GearProgressionSystem.5.1.1.13 = 23041	# Trinket 2
-AiPlayerbot.GearProgressionSystem.5.1.1.14 = 23045	# Back
-AiPlayerbot.GearProgressionSystem.5.1.1.15 = 22691	# Main Hand
-AiPlayerbot.GearProgressionSystem.5.1.1.16 = 0		# Off Hand
-AiPlayerbot.GearProgressionSystem.5.1.1.17 = 22811	# Ranged
-AiPlayerbot.GearProgressionSystem.5.1.1.18 = 5976	# Tabard
+AiPlayerbot.GearProgressionSystem.5.1.0.0 = 12640 	# Head
+AiPlayerbot.GearProgressionSystem.5.1.0.1 = 23053	# Neck
+AiPlayerbot.GearProgressionSystem.5.1.0.2 = 21330	# Shoulder
+AiPlayerbot.GearProgressionSystem.5.1.0.3 = 0		# Shirt
+AiPlayerbot.GearProgressionSystem.5.1.0.4 = 23000	# Chest
+AiPlayerbot.GearProgressionSystem.5.1.0.5 = 23219	# Waist
+AiPlayerbot.GearProgressionSystem.5.1.0.6 = 23068	# Legs
+AiPlayerbot.GearProgressionSystem.5.1.0.7 = 19387	# Feet
+AiPlayerbot.GearProgressionSystem.5.1.0.8 = 22936	# Wrists
+AiPlayerbot.GearProgressionSystem.5.1.0.9 = 21581	# Hands
+AiPlayerbot.GearProgressionSystem.5.1.0.10 = 23038	# Finger 1
+AiPlayerbot.GearProgressionSystem.5.1.0.11 = 21677	# Finger 2
+AiPlayerbot.GearProgressionSystem.5.1.0.12 = 19406	# Trinket 1
+AiPlayerbot.GearProgressionSystem.5.1.0.13 = 23041	# Trinket 2
+AiPlayerbot.GearProgressionSystem.5.1.0.14 = 23045	# Back
+AiPlayerbot.GearProgressionSystem.5.1.0.15 = 22691	# Main Hand
+AiPlayerbot.GearProgressionSystem.5.1.0.16 = 0		# Off Hand
+AiPlayerbot.GearProgressionSystem.5.1.0.17 = 22811	# Ranged
+AiPlayerbot.GearProgressionSystem.5.1.0.18 = 5976	# Tabard
 
 # Level 5 (5) Warrior (1) Fury (1)
 # https://www.wowhead.com/classic/gear-planner/warrior/tauren/AjwAATFgAloNA1NSBVnYBlqzB1ocCEu7CVmYClRNC1n-DFStDUvODloBD1oFEFoOEVwZElkb
@@ -4561,25 +4621,25 @@ AiPlayerbot.GearProgressionSystem.5.7.1.18 = 5976	# Tabard
 
 # Level 5 (5) Shaman (7) Restoration (2)
 # https://www.wowhead.com/classic/gear-planner/shaman/tauren/BDwAAAEAV8ICAFTQAwBXwwUAV8AGAFROBwBXwQgAV8QJAFfHCgBXxQsAWhkMAFmbDQBaBw4AS8MPAFRPEABaEBEAWSMSAFd8
-AiPlayerbot.GearProgressionSystem.5.7.1.0 = 22466	# Head
-AiPlayerbot.GearProgressionSystem.5.7.1.1 = 21712	# Neck
-AiPlayerbot.GearProgressionSystem.5.7.1.2 = 22467	# Shoulder
-AiPlayerbot.GearProgressionSystem.5.7.1.3 = 0		# Shirt
-AiPlayerbot.GearProgressionSystem.5.7.1.4 = 22464	# Chest
-AiPlayerbot.GearProgressionSystem.5.7.1.5 = 21582	# Waist
-AiPlayerbot.GearProgressionSystem.5.7.1.6 = 22465	# Legs
-AiPlayerbot.GearProgressionSystem.5.7.1.7 = 22468	# Feet
-AiPlayerbot.GearProgressionSystem.5.7.1.8 = 22471	# Wrists
-AiPlayerbot.GearProgressionSystem.5.7.1.9 = 22469	# Hands
-AiPlayerbot.GearProgressionSystem.5.7.1.10 = 23065	# Finger 1
-AiPlayerbot.GearProgressionSystem.5.7.1.11 = 22939	# Finger 2
-AiPlayerbot.GearProgressionSystem.5.7.1.12 = 23047	# Trinket 1
-AiPlayerbot.GearProgressionSystem.5.7.1.13 = 19395	# Trinket 2
-AiPlayerbot.GearProgressionSystem.5.7.1.14 = 21583	# Back
-AiPlayerbot.GearProgressionSystem.5.7.1.15 = 23056	# Main Hand
-AiPlayerbot.GearProgressionSystem.5.7.1.16 = 22819	# Off Hand
-AiPlayerbot.GearProgressionSystem.5.7.1.17 = 22396	# Ranged
-AiPlayerbot.GearProgressionSystem.5.7.1.18 = 5976	# Tabard
+AiPlayerbot.GearProgressionSystem.5.7.2.0 = 22466	# Head
+AiPlayerbot.GearProgressionSystem.5.7.2.1 = 21712	# Neck
+AiPlayerbot.GearProgressionSystem.5.7.2.2 = 22467	# Shoulder
+AiPlayerbot.GearProgressionSystem.5.7.2.3 = 0		# Shirt
+AiPlayerbot.GearProgressionSystem.5.7.2.4 = 22464	# Chest
+AiPlayerbot.GearProgressionSystem.5.7.2.5 = 21582	# Waist
+AiPlayerbot.GearProgressionSystem.5.7.2.6 = 22465	# Legs
+AiPlayerbot.GearProgressionSystem.5.7.2.7 = 22468	# Feet
+AiPlayerbot.GearProgressionSystem.5.7.2.8 = 22471	# Wrists
+AiPlayerbot.GearProgressionSystem.5.7.2.9 = 22469	# Hands
+AiPlayerbot.GearProgressionSystem.5.7.2.10 = 23065	# Finger 1
+AiPlayerbot.GearProgressionSystem.5.7.2.11 = 22939	# Finger 2
+AiPlayerbot.GearProgressionSystem.5.7.2.12 = 23047	# Trinket 1
+AiPlayerbot.GearProgressionSystem.5.7.2.13 = 19395	# Trinket 2
+AiPlayerbot.GearProgressionSystem.5.7.2.14 = 21583	# Back
+AiPlayerbot.GearProgressionSystem.5.7.2.15 = 23056	# Main Hand
+AiPlayerbot.GearProgressionSystem.5.7.2.16 = 22819	# Off Hand
+AiPlayerbot.GearProgressionSystem.5.7.2.17 = 22396	# Ranged
+AiPlayerbot.GearProgressionSystem.5.7.2.18 = 5976	# Tabard
 
 # Level 5 (5) Mage (8) Arcane (0)
 # https://www.wowhead.com/classic/gear-planner/mage/gnome/AzwAAAFX4gJaEQNZxwVX4AZYygdaHghX5AlSwgpUUQtUzQxaFg1Liw5Lsw9aChBZFxFaCRJZJQ

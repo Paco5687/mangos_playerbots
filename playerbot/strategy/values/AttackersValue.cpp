@@ -52,7 +52,7 @@ std::list<ObjectGuid> AttackersValue::Calculate()
             if (player == bot)
                 continue;
 
-            if (player->GetMapId() != bot->GetMapId())
+            if (!ai->IsSafe(player))
                 continue;
 
             if (sServerFacade.GetDistance2d(bot, player) > 10.0f)
@@ -208,7 +208,7 @@ void AttackersValue::AddTargetsOf(Player* player, std::set<Unit*>& targets, std:
             const std::string ignoreValidate = std::to_string(true);
             const std::string range = std::to_string((int32)GetRange());
             const std::vector<std::string> qualifiers = { range, ignoreValidate };
-            const std::list<ObjectGuid> possibleTargets = PAI_VALUE2(std::list<ObjectGuid>, "possible targets", Qualified::MultiQualify(qualifiers, ":"));
+            const std::list<ObjectGuid> possibleTargets = PAI_VALUE2(std::list<ObjectGuid>, "possible targets no los", Qualified::MultiQualify(qualifiers, ":"));
             for (const ObjectGuid& guid : possibleTargets)
             {
                 if (Unit* unit = ai->GetUnit(guid))
@@ -273,6 +273,9 @@ void AttackersValue::AddTargetsOf(Player* player, std::set<Unit*>& targets, std:
         // Filter the units that are valid
         for (Unit* unit : units)
         {
+            if (!ai->IsSafe(unit))
+                continue;
+
             // Prevent checking a target that has already been validated
             if((targets.find(unit) == targets.end()))
             {
@@ -424,7 +427,9 @@ bool AttackersValue::IgnoreTarget(Unit* target, Player* playerToCheckAgainst)
             return true;
 
         //When moving to master far away.
-        if (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE2(bool, "trigger active", "out of react range"))
+        if ((ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+            ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)) &&
+            AI_VALUE2(bool, "trigger active", "out of react range"))
             return true;
 
         if (ai->GetMaster() && !ai->HasActivePlayerMaster())
@@ -498,7 +503,7 @@ std::string AttackersValue::Format()
             out << target;      
     }
 
-    return out.str().c_str();
+    return out.str();
 }
 
 std::list<ObjectGuid> AttackersTargetingMeValue::Calculate()

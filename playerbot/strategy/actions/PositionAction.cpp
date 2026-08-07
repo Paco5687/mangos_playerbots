@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "playerbot/strategy/values/PositionValue.h"
+#include "playerbot/strategy/values/FreeMoveValues.h"
 #include "PositionAction.h"
 
 using namespace ai;
@@ -108,7 +109,7 @@ bool MoveToPositionAction::isUseful()
 {
     ai::PositionEntry pos = context->GetValue<ai::PositionMap&>("position")->Get()[qualifier];
     float distance = AI_VALUE2(float, "distance", std::string("position_") + qualifier);
-    return pos.isSet() && distance > ai->GetRange("follow") && IsMovingAllowed();
+    return pos.isSet() && distance > ai->GetRange("follow") && ai->CanMove();
 }
 
 bool GuardAction::isUseful()
@@ -130,6 +131,13 @@ bool GuardAction::isUseful()
 
         if (formationPosition.sqDistance2d(target) > ai->GetRange("spell")) //Do not move to guard if we can't attack from that position.
             return false;
+    }
+    else
+    {
+        if (AI_VALUE(GuidPosition, "rpg target") && CanFreeMoveValue::CanFreeMoveTo(ai, AI_VALUE(GuidPosition, "rpg target")))
+        {
+            return false;
+        }
     }
             
     return true;

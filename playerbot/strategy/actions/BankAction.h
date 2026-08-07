@@ -30,5 +30,9 @@ namespace ai
         bool Withdraw(Player* requester, const uint32 itemid);
         bool Deposit(Player* requester, Item* pItem);
         Item* FindItemInBank(uint32 ItemId);
+
+    public:
+        bool AutoDeposit();
+        bool AutoWithdraw();
     };
 }

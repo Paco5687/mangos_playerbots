@@ -4,6 +4,7 @@
 #include "AI/BaseAI/CreatureAI.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/generic/PullStrategy.h"
+#include "playerbot/strategy/values/FreeMoveValues.h"
 
 bool DpsAssistAction::isUseful()
 {
@@ -24,7 +25,7 @@ bool AttackAnythingAction::isUseful()
 
     Unit* target = GetTarget();
 
-    if (!target)
+    if (!target || !ai->IsSafe(target))
         return false;
 
     if (ai->ContainsStrategy(STRATEGY_TYPE_HEAL) && !ai->HasStrategy("offdps", BotState::BOT_STATE_COMBAT))
@@ -33,7 +34,7 @@ bool AttackAnythingAction::isUseful()
     if(!target->IsPlayer() && bot->isInFront(target,target->GetAttackDistance(bot)*1.5f, M_PI_F*0.5f) && target->CanAttackOnSight(bot) && target->GetLevel() < bot->GetLevel() + 3.0) //Attack before being attacked.
         return true;
 
-    if (AI_VALUE(bool, "travel target traveling") && AI_VALUE2(bool, "can free move to", AI_VALUE(TravelTarget*,"travel target")->GetPosStr())) //Bot is traveling
+    if (AI_VALUE(bool, "travel target traveling") && CanFreeMoveValue::CanFreeMoveTo(ai, *AI_VALUE(TravelTarget*,"travel target")->GetPosition())) //Bot is traveling
         return false;
 
     return true;
@@ -52,8 +53,6 @@ bool ai::AttackAnythingAction::Execute(Event& event)
         Unit* grindTarget = GetTarget();
         if (grindTarget)
         {
-            context->ClearExpiredValues("can free target", 10); //Clean up old free targets.
-
             std::string grindName = grindTarget->GetName();
             if (!grindName.empty())
             {
@@ -128,7 +127,6 @@ bool SelectNewTargetAction::Execute(Event& event)
     bot->SetSelectionGuid(ObjectGuid());
     ai->InterruptSpell();
     bot->AttackStop();
-
     // Stop pet attacking
     Pet* pet = bot->GetPet();
     if (pet)
@@ -151,6 +149,7 @@ bool SelectNewTargetAction::Execute(Event& event)
         }
     }
 
+    bool moreAttackers = false;
     // Check if there is any enemy targets available to attack
     if (AI_VALUE(bool, "has attackers"))
     {
@@ -160,6 +159,7 @@ bool SelectNewTargetAction::Execute(Event& event)
             // Check if there is an enemy player nearby
             if (AI_VALUE(bool, "has enemy player targets"))
             {
+                moreAttackers = true;
                 return ai->DoSpecificAction("attack enemy player", event, true);
             }
         }
@@ -167,10 +167,12 @@ bool SelectNewTargetAction::Execute(Event& event)
         // Let the dps/tank assist pick a target to attack
         if (ai->HasStrategy("dps assist", BotState::BOT_STATE_NON_COMBAT))
         {
+            moreAttackers = true;
             return ai->DoSpecificAction("dps assist", event, true);
         }
         else if (ai->HasStrategy("tank assist", BotState::BOT_STATE_NON_COMBAT))
         {
+            moreAttackers = true;
             return ai->DoSpecificAction("tank assist", event, true);
         }
     }

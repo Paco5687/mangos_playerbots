@@ -232,10 +232,11 @@ namespace ai
                 creators["mongoose bite"] = [](PlayerbotAI* ai) { return new MongooseBiteCastTrigger(ai); };
                 creators["viper sting"] = [](PlayerbotAI* ai) { return new ViperStingTrigger(ai); };
                 creators["aimed shot"] = [](PlayerbotAI* ai) { return new AimedShotTrigger(ai); };
+                creators["arcane shot"] = [](PlayerbotAI* ai) { return new ArcaneShotTrigger(ai); };
                 creators["bestial wrath"] = [](PlayerbotAI* ai) { return new BestialWrathBoostTrigger(ai); };
                 creators["silencing shot interrupt"] = [](PlayerbotAI* ai) { return new SilencingShotInterruptTrigger(ai); };
                 creators["silencing shot on enemy healer"] = [](PlayerbotAI* ai) { return new SilencingShotInterruptHealerTrigger(ai); };
-                creators["no beast"] = [](PlayerbotAI* ai) { return new HunterNoPet(ai); };
+                creators["no pet"] = [](PlayerbotAI* ai) { return new HunterNoPet(ai); };
                 creators["stealthed nearby"] = [](PlayerbotAI* ai) { return new StealthedNearbyTrigger(ai); };
             }
         };
@@ -246,6 +247,7 @@ namespace ai
             AiObjectContextInternal()
             {
                 creators["auto shot"] = [](PlayerbotAI* ai) { return new CastAutoShotAction(ai); };
+                creators["equip ammo"] = [](PlayerbotAI* ai) { return new HunterEquipAmmoAction(ai); };
                 creators["aimed shot"] = [](PlayerbotAI* ai) { return new CastAimedShotAction(ai); };
                 creators["chimera shot"] = [](PlayerbotAI* ai) { return new CastChimeraShotAction(ai); };
                 creators["explosive shot"] = [](PlayerbotAI* ai) { return new CastExplosiveShotAction(ai); };
@@ -340,3 +342,4 @@ HunterAiObjectContext::HunterAiObjectContext(PlayerbotAI* ai) : AiObjectContext(
     actionContexts.Add(new ai::hunter::AiObjectContextInternal());
     triggerContexts.Add(new ai::hunter::TriggerFactoryInternal());
 }
+

@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "PossibleTargetsValue.h"
 #include "PossibleAttackTargetsValue.h"
+#include "FreeMoveValues.h"
 
 #include "playerbot/ServerFacade.h"
 #include "Grids/GridNotifiers.h"
@@ -49,8 +50,8 @@ bool PossibleTargetsValue::AcceptUnit(Unit* unit)
 
 void PossibleTargetsValue::FindPossibleTargets(Player* player, std::list<Unit*>& targets, float range)
 {
-    MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck u_check(player, range);
-    MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(targets, u_check);
+    MaNGOS::AnyUnitInObjectRangeCheck u_check(player, range);
+    MaNGOS::UnitListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> searcher(targets, u_check);
     Cell::VisitAllObjects(player, searcher, range);
 }
 
@@ -84,7 +85,8 @@ bool PossibleTargetsValue::IsAttackable(Unit* target, Player* player)
     return !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_ATTACKABLE_1) &&
            !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNTARGETABLE) &&
            (inVehicle || !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE)) &&
-           !target->HasAuraType(SPELL_AURA_SPIRIT_OF_REDEMPTION);
+           !target->HasAuraType(SPELL_AURA_SPIRIT_OF_REDEMPTION) &&
+           player->CanAttack(target);
 }
 
 bool PossibleTargetsValue::IsValid(Unit* target, Player* player, bool ignoreLos)
@@ -110,13 +112,18 @@ bool PossibleTargetsValue::IsValid(Unit* target, Player* player, bool ignoreLos)
             return false;
         }
 
-        // If the target is not visible (to the owner bot)
-        if (!ignoreLos && !target->IsVisibleForOrDetect(player, player->GetCamera().GetBody(), true))
-        {
-            return false;
-        }
+        bool isInCombatWithTarget = target->GetVictim() == player || 
+                                     target->getThreatManager().getThreat(player) > 0.0f ||
+                                     player->IsInCombat();
 
-        if (!PAI_VALUE2(bool, "can free attack", GuidPosition(target).to_string()))
+        if (!ignoreLos && !isInCombatWithTarget)
+        {
+            if (!target->IsVisibleForOrDetect(player, player->GetCamera().GetBody(), true))
+            {
+                return false;
+            }
+        }
+        if (!CanFreeMoveValue::CanFreeAttack(player->GetPlayerbotAI(), target))
             return false;
 
         return true;

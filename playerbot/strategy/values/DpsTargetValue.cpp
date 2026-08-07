@@ -1,40 +1,10 @@
 
 #include "playerbot/playerbot.h"
 #include "DpsTargetValue.h"
+#include "LeastHpTargetValue.h"
 
 using namespace ai;
 
-class FindLeastHpTargetStrategy : public FindNonCcTargetStrategy
-{
-public:
-    FindLeastHpTargetStrategy(PlayerbotAI* ai) : FindNonCcTargetStrategy(ai)
-    {
-        minHealth = 0;
-    }
-
-public:
-    virtual void CheckAttacker(Unit* attacker, ThreatManager* threatManager)
-    {
-        // do not use this logic for pvp
-        if (attacker->IsPlayer())
-            return;
-
-        if (IsCcTarget(attacker)) return;
-
-        Group* group = ai->GetBot()->GetGroup();
-        if (group)
-        {
-            uint64 guid = group->GetTargetIcon(4);
-            if (guid && attacker->GetObjectGuid() == ObjectGuid(guid))
-                return;
-        }
-        if (!result || result->GetHealth() > attacker->GetHealth())
-            result = attacker;
-    }
-
-protected:
-    float minHealth;
-};
 
 Unit* DpsTargetValue::Calculate()
 {
@@ -54,7 +24,7 @@ public:
     }
 
 public:
-    virtual void CheckAttacker(Unit* attacker, ThreatManager* threatManager)
+    virtual void CheckAttacker(Unit* attacker, ThreatManager* threatManager) override
     {
         Group* group = ai->GetBot()->GetGroup();
         if (group)

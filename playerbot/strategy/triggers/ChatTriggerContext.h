@@ -23,6 +23,7 @@ namespace ai
             creators["q"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "q"); };
             creators["ll"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "ll"); };
             creators["ss"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "ss"); };
+            creators["avoid creature"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "avoid creature"); };
             creators["loot"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "add all loot"); };
             creators["add all loot"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "add all loot"); };
             creators["release"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "release"); };
@@ -74,6 +75,7 @@ namespace ai
             creators["gbank"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "gb"); };
             creators["bank"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "bank"); };
             creators["follow"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "follow"); };
+            creators["wander"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "wander"); };
             creators["stay"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "stay"); };
             creators["guard"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "guard"); };
             creators["free"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "free"); };
@@ -102,6 +104,7 @@ namespace ai
             creators["position"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "position"); };
             creators["summon"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "summon"); };
             creators["who"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "who"); };
+            creators["where"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "where"); };
             creators["save mana"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "save mana"); };
             creators["max dps"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "max dps"); };
             creators["possible attack targets"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "possible attack targets"); };

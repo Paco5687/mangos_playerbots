@@ -107,7 +107,7 @@ void AutoLearnSpellAction::LearnTrainerSpells(std::ostringstream* out)
             TrainerSpellState state = bot->GetTrainerSpellState(tSpell, reqLevel);
             if (state != TRAINER_SPELL_GREEN)
                 continue;
-
+            
             if (co->TrainerType == TRAINER_TYPE_TRADESKILLS)
             {
                 SpellEntry const* spell = sServerFacade.LookupSpellInfo(tSpell->spell);
@@ -127,22 +127,29 @@ void AutoLearnSpellAction::LearnTrainerSpells(std::ostringstream* out)
                                 SkillLineEntry const* pSkill = sSkillLineStore.LookupEntry(skill);
                                 if (pSkill)
                                 {
+                                    if (!bot->HasSkill(skill))
+                                    {
 #ifdef MANGOSBOT_ZERO
-                                    if (SpellName.find("Apprentice") != std::string::npos && pSkill->categoryId == SKILL_CATEGORY_PROFESSION || pSkill->categoryId == SKILL_CATEGORY_SECONDARY)
-                                        continue;
+                                        if (SpellName.find("Apprentice") != std::string::npos && pSkill->categoryId == SKILL_CATEGORY_PROFESSION || pSkill->categoryId == SKILL_CATEGORY_SECONDARY)
+                                            continue;
 #elif defined(MANGOSBOT_ONE) || defined(MANGOSBOT_TWO) // TBC OR WOTLK
-                                    std::string SpellRank = spell->Rank[0];
-                                    if (SpellName.find("Apprentice") != std::string::npos && (pSkill->categoryId == SKILL_CATEGORY_PROFESSION || pSkill->categoryId == SKILL_CATEGORY_SECONDARY))
-                                        continue;
-                                    else if (SpellRank.find("Apprentice") != std::string::npos && (pSkill->categoryId == SKILL_CATEGORY_PROFESSION || pSkill->categoryId == SKILL_CATEGORY_SECONDARY))
-                                        continue;
+                                        std::string SpellRank = spell->Rank[0];
+                                        if (SpellName.find("Apprentice") != std::string::npos && (pSkill->categoryId == SKILL_CATEGORY_PROFESSION || pSkill->categoryId == SKILL_CATEGORY_SECONDARY))
+                                            continue;
+                                        else if (SpellRank.find("Apprentice") != std::string::npos && (pSkill->categoryId == SKILL_CATEGORY_PROFESSION || pSkill->categoryId == SKILL_CATEGORY_SECONDARY))
+                                            continue;
 #endif
+                                    }
+                                    else
+                                        bot->learnSpell(spell->Id, false);
+
                                 }
                             }
                         }
                 }
 
             }
+            
 #ifdef MANGOSBOT_ZERO // Vanilla
             LearnSpellFromSpell(tSpell->spell, out);
 #elif defined(MANGOSBOT_ONE) || defined(MANGOSBOT_TWO)
@@ -278,7 +285,7 @@ void AutoLearnSpellAction::GetClassQuestItem(Quest const* quest, std::ostringstr
                     else if (result == EQUIP_ERR_INVENTORY_FULL)
                     {
                         MailDraft draft("Item(s) from quest reward", quest->GetTitle());
-                        Item* item = item->CreateItem(itemP->ItemId, quest->RewItemCount[i]);
+                        Item* item = Item::CreateItem(itemP->ItemId, quest->RewItemCount[i]);
                         draft.AddItem(item);
                         draft.SendMailTo(MailReceiver(bot), MailSender(bot));
                         *out << "Could not add item " << chat->formatItem(itemP) << " from " << quest->GetTitle() << ". " << bot->GetName() << "'s inventory is full.";

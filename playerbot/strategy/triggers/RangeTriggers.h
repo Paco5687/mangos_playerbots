@@ -13,22 +13,30 @@ namespace ai
     public:
         EnemyTooCloseForSpellTrigger(PlayerbotAI* ai) : Trigger(ai, "enemy too close for spell") {}
         
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, "current target");
             if (target)
             {
-                if (ai->HasStrategy("follow", BotState::BOT_STATE_COMBAT) || ai->HasStrategy("guard", BotState::BOT_STATE_COMBAT))
+                if (ai->HasStrategy("follow", BotState::BOT_STATE_COMBAT) ||
+                    ai->HasStrategy("guard", BotState::BOT_STATE_COMBAT) ||
+                    ai->HasStrategy("stay", BotState::BOT_STATE_COMBAT) ||
+                    ai->HasStrategy("wander", BotState::BOT_STATE_COMBAT))
                     if(bot->getClass() != CLASS_HUNTER || sServerFacade.GetDistance2d(bot, target) > 5.0f)
                         return false;                   
 
                 const bool canMove = !PossibleAttackTargetsValue::HasBreakableCC(target, bot) && !PossibleAttackTargetsValue::HasUnBreakableCC(target, bot);
 
-                // Don't move if the target is targeting you and you can't add distance between you and the target
+                // Don't move if the target is targeting you and you can't add distance between you and the target (how fast bot runs)
                 if (target->GetTarget() == bot && canMove && target->GetSpeedInMotion() > (bot->GetSpeedInMotion() * 0.65))
                 {
                     return false;
                 }
+
+                // Don't move if our flee range (how far bot runs) is too low to escape attack distance
+                // This is good if you don't want a bot to run away from an enemy that can't be cc or tanked
+                if (ai->GetRange("flee") <= ATTACK_DISTANCE)
+                    return false;
 
                 float const combatReach = bot->GetCombinedCombatReach(target, false);
                 float const minDistance = ai->GetRange("spell") + combatReach;
@@ -89,7 +97,7 @@ namespace ai
     public:
         EnemyTooCloseForShootTrigger(PlayerbotAI* ai) : Trigger(ai, "enemy too close for shoot") {}
         
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, "current target");
             if (target)
@@ -160,7 +168,7 @@ namespace ai
     public:
         EnemyTooCloseForMeleeTrigger(PlayerbotAI* ai) : Trigger(ai, "enemy too close for melee", 3) {}
         
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, "current target");
             if (target && target->IsPlayer())
@@ -220,14 +228,14 @@ namespace ai
             this->distance = distance;
         }
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, GetTargetName());
             return target &&
                 sServerFacade.IsDistanceGreaterThan(AI_VALUE2(float, "distance", GetTargetName()), distance);
         }
 
-        virtual std::string GetTargetName() { return "current target"; }
+        virtual std::string GetTargetName() override { return "current target"; }
 
     protected:
         float distance;
@@ -238,7 +246,7 @@ namespace ai
     public:
         EnemyOutOfMeleeTrigger(PlayerbotAI* ai) : OutOfRangeTrigger(ai, "enemy out of melee range", sPlayerbotAIConfig.meleeDistance) {}
         
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, GetTargetName());
             if (!target)
@@ -253,7 +261,7 @@ namespace ai
     public:
         EnemyOutOfSpellRangeTrigger(PlayerbotAI* ai) : OutOfRangeTrigger(ai, "enemy out of spell range", ai->GetRange("spell")) {}
         
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, GetTargetName());
             if (!target)
@@ -267,9 +275,9 @@ namespace ai
     {
     public:
         PartyMemberToHealOutOfSpellRangeTrigger(PlayerbotAI* ai) : OutOfRangeTrigger(ai, "party member to heal out of spell range", ai->GetRange("heal")) {}
-        virtual std::string GetTargetName() { return "party member to heal"; }
+        virtual std::string GetTargetName() override { return "party member to heal"; }
         
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* target = AI_VALUE(Unit*, GetTargetName());
             if (!target)
@@ -284,7 +292,7 @@ namespace ai
     public:
         FarFromMasterTrigger(PlayerbotAI* ai, std::string name = "far from master", float distance = 12.0f, int checkInterval = 50) : Trigger(ai, name, checkInterval), distance(distance) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             Unit* master = AI_VALUE(Unit*, "master target");
             if (master && sServerFacade.IsFriendlyTo(bot, master))
@@ -313,7 +321,7 @@ namespace ai
     public:
         NotNearMasterTrigger(PlayerbotAI* ai, std::string name = "not near master", int checkInterval = 2) : OutOfReactRangeTrigger(ai, name, 5.0f, checkInterval) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
             return FarFromMasterTrigger::IsActive() && !sServerFacade.IsDistanceGreaterThan(AI_VALUE2(float, "distance", "master target"), sPlayerbotAIConfig.reactDistance);
         }
@@ -324,12 +332,8 @@ namespace ai
     public:
         UpdateFollowTrigger(PlayerbotAI* ai) : NotNearMasterTrigger(ai, "update follow", 3) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
-            //We are not near target. Move closer
-            if (NotNearMasterTrigger::IsActive())
-                return true;
-
             Unit* followTarget = AI_VALUE(Unit*, "follow target");
 
             if (!followTarget || !ai->IsSafe(followTarget))
@@ -371,16 +375,10 @@ namespace ai
     class StopFollowTrigger : public Trigger
     {
     public:
-        StopFollowTrigger(PlayerbotAI* ai) : Trigger(ai, "stop follow", 1) {}
+        StopFollowTrigger(PlayerbotAI* ai, std::string name = "stop follow", int checkInterval = 2) : Trigger(ai, name, checkInterval) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
-            if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
-                return false;
-
-            if (sServerFacade.GetChaseTarget(bot) && !sServerFacade.GetChaseTarget(bot)->IsPlayer() && sServerFacade.GetChaseTarget(bot)->IsMoving())
-                return false;
-
             Unit* followTarget = AI_VALUE(Unit*, "follow target");
 
             if (!followTarget)
@@ -397,14 +395,53 @@ namespace ai
         }
     };
 
+    class WanderFarTrigger : public Trigger
+    {
+    public:
+        WanderFarTrigger(PlayerbotAI * ai, std::string name = "wander far", int checkInterval = 2)
+            : Trigger(ai, name, checkInterval) {
+        }
+
+        bool IsActive() override
+        {
+            return !AI_VALUE2(bool, "can free move", "wandermax");
+        }
+    };
+
+    class WanderMediumTrigger : public Trigger
+    {
+    public:
+        WanderMediumTrigger(PlayerbotAI* ai, std::string name = "wander medium", int checkInterval = 2) : Trigger(ai, name, checkInterval) {}
+
+        bool IsActive() override
+        {
+            return !AI_VALUE2(bool, "can free move", "wandermin") && AI_VALUE2(bool, "can free move", "wandermax");
+        }
+    };
+
+    class WanderNearTrigger : public StopFollowTrigger
+    {
+    public:
+        WanderNearTrigger(PlayerbotAI* ai, std::string name = "wander near", int checkInterval = 2) : StopFollowTrigger(ai, name, checkInterval) {}
+
+        bool IsActive() override
+        {
+            if (StopFollowTrigger::IsActive())
+                return true;
+
+            return AI_VALUE2(bool, "can free move", "wandermin");
+        }
+    };
+
     class WaitForAttackSafeDistanceTrigger : public Trigger
     {
     public:
         WaitForAttackSafeDistanceTrigger(PlayerbotAI* ai, std::string name = "wait for attack safe distance") : Trigger(ai, name) {}
 
-        virtual bool IsActive()
+        virtual bool IsActive() override
         {
-            if (WaitForAttackStrategy::ShouldWait(ai))
+            // we can't let them run away from the targets we need to cc at the start
+            if (WaitForAttackStrategy::ShouldWait(ai) && !AI_VALUE(Unit*, "rti cc target"))
             {
                 // Do not move if stay strategy is set
                 if (!ai->HasStrategy("stay", ai->GetState()))
@@ -428,5 +465,16 @@ namespace ai
 
             return false;
         }
+    };
+
+    class OutOfFreeMoveRangeTrigger : public Trigger
+    {
+    public:
+        OutOfFreeMoveRangeTrigger(PlayerbotAI* ai, std::string name = "out of free move range") : Trigger(ai, name) {}
+
+        virtual bool IsActive() override
+        {
+            return !AI_VALUE(bool, "can free move");
+        };
     };
 }

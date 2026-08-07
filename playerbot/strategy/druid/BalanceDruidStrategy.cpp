@@ -20,7 +20,7 @@ private:
     static ActionNode* innervate(PlayerbotAI* ai)
     {
         return new ActionNode("innervate",
-            /*P*/ NextAction::array(0, new NextAction("caster form"), NULL),
+            /*P*/ NextAction::array(0, new NextAction("balance caster form"), NULL),
             /*A*/ NextAction::array(0, new NextAction("mana potion"), NULL),
             /*C*/ NULL);
     }
@@ -39,7 +39,7 @@ BalanceDruidStrategy::BalanceDruidStrategy(PlayerbotAI* ai) : DruidStrategy(ai)
 
 NextAction** BalanceDruidStrategy::GetDefaultCombatActions()
 {
-    return NextAction::array(0, new NextAction("wrath", ACTION_IDLE), NULL);
+    return NextAction::array(0, new NextAction("starfire", ACTION_IDLE), NULL);
 }
 
 void BalanceDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -240,11 +240,11 @@ void BalanceDruidBuffStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
 
     triggers.push_back(new TriggerNode(
         "moonkin form",
-        NextAction::array(0, new NextAction("moonkin form", ACTION_MOVE), NULL)));
+        NextAction::array(0, new NextAction("moonkin form", ACTION_HIGH), NULL)));
 
     triggers.push_back(new TriggerNode(
         "innervate",
-        NextAction::array(0, new NextAction("innervate", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("innervate", ACTION_HIGH + 1), NULL)));
 }
 
 void BalanceDruidBuffStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -448,7 +448,7 @@ void BalanceDruidCureRaidStrategy::InitNonCombatTriggers(std::list<TriggerNode*>
 
 NextAction** BalanceDruidStrategy::GetDefaultCombatActions()
 {
-    return NextAction::array(0, new NextAction("wrath", ACTION_IDLE), NULL);
+    return NextAction::array(0, new NextAction("starfire", ACTION_IDLE), NULL);
 }
 
 void BalanceDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -481,7 +481,7 @@ void BalanceDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         NextAction::array(0, new NextAction("moonfire", ACTION_NORMAL + 1), NULL)));
 
     triggers.push_back(new TriggerNode(
-        "often",
+        "very often",
         NextAction::array(0, new NextAction("starfire", ACTION_NORMAL), NULL)));
 }
 
@@ -637,11 +637,11 @@ void BalanceDruidBuffStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
 
     triggers.push_back(new TriggerNode(
         "moonkin form",
-        NextAction::array(0, new NextAction("moonkin form", ACTION_MOVE), NULL)));
+        NextAction::array(0, new NextAction("moonkin form", ACTION_HIGH), NULL)));
 
     triggers.push_back(new TriggerNode(
         "innervate",
-        NextAction::array(0, new NextAction("innervate", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("innervate", ACTION_HIGH + 1), NULL)));
 }
 
 void BalanceDruidBuffStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -1042,11 +1042,11 @@ void BalanceDruidBuffStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
 
     triggers.push_back(new TriggerNode(
         "moonkin form",
-        NextAction::array(0, new NextAction("moonkin form", ACTION_MOVE), NULL)));
+        NextAction::array(0, new NextAction("moonkin form", ACTION_HIGH), NULL)));
 
     triggers.push_back(new TriggerNode(
         "innervate",
-        NextAction::array(0, new NextAction("innervate", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("innervate", ACTION_HIGH + 1), NULL)));
 }
 
 void BalanceDruidBuffStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

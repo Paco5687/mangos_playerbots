@@ -9,14 +9,14 @@ namespace ai
 	{
 	public:
 		DemonArmorTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "demon armor") {}
-		virtual bool IsActive();
+		virtual bool IsActive() override;
 	};
 
     class SpellstoneTrigger : public BuffTrigger
     {
     public:
         SpellstoneTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "spellstone") {}
-        virtual bool IsActive();
+        virtual bool IsActive() override;
     };
 
     class NoCurseTrigger : public Trigger
@@ -153,7 +153,7 @@ namespace ai
     public:
         WarlockConjuredItemTrigger(PlayerbotAI* ai, std::string item) : ItemCountTrigger(ai, item, 1) {}
 
-        virtual bool IsActive() { return ItemCountTrigger::IsActive() && (ai->HasCheat(BotCheatMask::item) || AI_VALUE2(uint32, "item count", "soul shard") > 0); }
+        virtual bool IsActive() override { return ItemCountTrigger::IsActive() && (ai->HasCheat(BotCheatMask::item) || AI_VALUE2(uint32, "item count", "soul shard") > 0); }
     };
 
     class HasSpellstoneTrigger : public WarlockConjuredItemTrigger
@@ -174,6 +174,12 @@ namespace ai
         HasHealthstoneTrigger(PlayerbotAI* ai) : WarlockConjuredItemTrigger(ai, "healthstone") {}
     };
 
+    class HasSoulstoneTrigger : public WarlockConjuredItemTrigger
+    {
+    public:
+        HasSoulstoneTrigger(PlayerbotAI* ai) : WarlockConjuredItemTrigger(ai, "soulstone") {}
+    };
+
     class FearTrigger : public HasCcTargetTrigger
     {
     public:
@@ -190,7 +196,7 @@ namespace ai
     {
     public:
         InfernoTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "inferno", 10) {}
-        virtual bool IsActive();
+        virtual bool IsActive() override;
     };
 
     class LifeTapTrigger : public Trigger
@@ -224,15 +230,15 @@ namespace ai
     class DemonicSacrificeTrigger : public Trigger
     {
     public:
-        DemonicSacrificeTrigger(PlayerbotAI* ai) : Trigger(ai, "demonic sacrifice", 5) {}
+        DemonicSacrificeTrigger(PlayerbotAI* ai) : Trigger(ai, "demonic sacrifice") {}
         bool IsActive() override;
     };
 
-    class SoulLinkTrigger : public Trigger
+    class SoulLinkTrigger : public BuffTrigger
     {
     public:
-        SoulLinkTrigger(PlayerbotAI* ai) : Trigger(ai, "soul link", 5) {}
-        bool IsActive() override;
+        SoulLinkTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "soul link", 5) {}
+        virtual bool IsActive() override;
     };
 
     class NoSpecificPetTrigger : public Trigger
@@ -296,7 +302,7 @@ namespace ai
     {
     public:
         SoulstoneTrigger(PlayerbotAI* ai) : ItemTargetTrigger(ai, "revive targets", true, true) {}
-        std::string GetTargetName() override { return "self target"; }
+        std::string GetTargetName() override { return "party member to soulstone"; }
         uint32 GetItemId() override;
     };
 }

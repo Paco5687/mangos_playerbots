@@ -24,8 +24,11 @@ public:
 private:
     ACTION_NODE_A(seal_of_vengeance, "seal of vengeance", "seal of command");
 
+#ifndef MANGOSBOT_ONE
     ACTION_NODE_A(seal_of_command, "seal of command", "seal of righteousness");
-
+#else
+    ACTION_NODE_A(seal_of_command, "seal of blood", "seal of command");
+#endif
     ACTION_NODE_A(crusader_strike, "crusader strike", "melee");
 
     ACTION_NODE_A(repentance, "repentance", "hammer of justice");
@@ -84,6 +87,10 @@ void RetributionPaladinStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
     triggers.push_back(new TriggerNode(
         "exorcism",
         NextAction::array(0, new NextAction("exorcism", ACTION_NORMAL + 4), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "target no judgement",
+        NextAction::array(0, new NextAction("seal of the crusader", ACTION_HIGH + 8), NULL)));
 
     triggers.push_back(new TriggerNode(
         "seal",
@@ -579,6 +586,10 @@ void RetributionPaladinStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
     triggers.push_back(new TriggerNode(
         "exorcism",
         NextAction::array(0, new NextAction("exorcism", ACTION_NORMAL + 4), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "target no judgement",
+        NextAction::array(0, new NextAction("seal of the crusader", ACTION_HIGH + 8), NULL)));
 
     triggers.push_back(new TriggerNode(
         "seal",

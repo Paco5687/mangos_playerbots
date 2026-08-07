@@ -3,6 +3,7 @@
 #include "FishAction.h"
 #include "playerbot/TravelMgr.h"
 #include "TellLosAction.h"
+#include "EquipAction.h"
 
 using namespace ai;
 
@@ -70,7 +71,7 @@ bool FishAction::isUseful()
         if (target->GetDestination()->GetPurpose() != TravelDestinationPurpose::GatherFishing)
             return false;
 
-        if (!bot->GetGroup() || ai->IsGroupLeader())
+        if (!bot->GetGroup() || ai->IsGroupLeader() || target->GetTimeLeft() < 0)
             target->CheckStatus();
     }
 
@@ -123,9 +124,8 @@ bool FishAction::Execute(Event& event)
     uint8 bagIndex = pole->GetBagSlot();
     uint8 slot = pole->GetSlot();
 
-    WorldPacket packet(CMSG_AUTOEQUIP_ITEM, 2);
-    packet << bagIndex << slot;
-    bot->GetSession()->HandleAutoEquipItemOpcode(packet);
+    if (slot != EQUIPMENT_SLOT_MAINHAND)
+        EquipAction::EquipItem(ai, GetMaster(), pole);
 
     Event fishCastEvent = Event("fish", "7731 " + chat->formatWorldobject(bot));
     bool didCast = CastCustomSpellAction::Execute(fishCastEvent);

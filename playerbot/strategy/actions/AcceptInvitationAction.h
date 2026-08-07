@@ -9,7 +9,7 @@ namespace ai
     public:
         AcceptInvitationAction(PlayerbotAI* ai) : Action(ai, "accept invitation") {}
 
-        virtual bool Execute(Event& event)
+        virtual bool Execute(Event& event) override
         {
             Group* grp = bot->GetGroupInvite();
             if (!grp)
@@ -42,7 +42,9 @@ namespace ai
             if (sRandomPlayerbotMgr.IsFreeBot(bot))
             {
                 ai->SetMaster(inviter);
-                ai->ChangeStrategy("+follow", BotState::BOT_STATE_NON_COMBAT);
+
+                std::string defaultMovementStrategy = ai->GetDefaultMovementStrategy();
+                ai->ChangeStrategy("+" + defaultMovementStrategy, BotState::BOT_STATE_NON_COMBAT);
             }
 
             ai->ResetStrategies();

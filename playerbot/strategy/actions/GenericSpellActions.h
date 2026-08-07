@@ -298,15 +298,20 @@ namespace ai
     class GreaterBuffOnPartyAction : public CastBuffSpellAction, public PartyMemberActionNameSupport
     {
     public:
-        GreaterBuffOnPartyAction(PlayerbotAI* ai, std::string spell, bool ignoreTanks = false) : CastBuffSpellAction(ai, spell), PartyMemberActionNameSupport(spell), ignoreTanks(ignoreTanks) {}
+        GreaterBuffOnPartyAction(PlayerbotAI* ai, std::string spell, std::string lowerSpell, bool ignoreTanks = false) : CastBuffSpellAction(ai, spell), PartyMemberActionNameSupport(spell), lowerSpell(lowerSpell), ignoreTanks(ignoreTanks) {}
 
     protected:
         virtual std::string getName() override { return PartyMemberActionNameSupport::getName(); }
         virtual std::string GetTargetName() override { return "party member without aura"; }
-        virtual std::string GetTargetQualifier() override { return GetSpellName() + "-" + (ignoreTanks ? "1" : "0"); }
+        virtual std::string GetTargetQualifier() override 
+        { 
+            const std::string spells = !lowerSpell.empty() ? GetSpellName() + "," + lowerSpell : GetSpellName();
+            return spells + "-" + (ignoreTanks ? "1" : "0"); 
+        }
 
     private:
         bool ignoreTanks;
+        std::string lowerSpell;
     };
 
     //---------------------------------------------------------------------------------------------------------------------
@@ -336,7 +341,7 @@ namespace ai
     {
     public:
         CastShootAction(PlayerbotAI* ai) : CastSpellAction(ai, "shoot"), rangedWeapon(nullptr), weaponDelay(0), needsAmmo(false) {}
-        ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_NONE; }
+        ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_LOW; }
         bool Execute(Event& event) override;
         bool isPossible() override;
 
@@ -391,6 +396,8 @@ namespace ai
     {
     public:
         CastWarStompAction(PlayerbotAI* ai) : CastSpellAction(ai, "war stomp") {}
+        bool isUseful() override;
+
     };
 
     //cc breakers

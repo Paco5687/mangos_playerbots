@@ -3,6 +3,16 @@
 
 namespace ai
 {
+    struct PositionTarget
+    {
+        bool valid;
+        uint32 mapId;
+        float x, y, z;
+        std::string name;
+        
+        PositionTarget() : valid(false), mapId(0), x(0), y(0), z(0) {}
+    };
+
     class DebugAction : public ChatCommandAction
     {
     public:
@@ -23,8 +33,10 @@ namespace ai
 
         void FakeSpell(uint32 spellId, Unit* truecaster, Unit* caster, ObjectGuid target = ObjectGuid(), std::list<ObjectGuid> otherTargets = {}, std::list<ObjectGuid> missTargets = {}, WorldPosition source = WorldPosition(), WorldPosition dest = WorldPosition(), bool forceDest = false);
         void addAura(uint32 spellId, Unit* target);
+        PositionTarget ParseLocation(const std::string& param, Player* bot);
     private:
         // Handler methods for each debug command
+        bool HandleDebugHelp(Event& event, Player* requester, const std::string& text, bool isMod);
         bool HandleAvoidScan(Event& event, Player* requester, const std::string& text);
         bool HandleAvoidAdd(Event& event, Player* requester, const std::string& text);
         bool HandleMount(Event& event, Player* requester, const std::string& text);
@@ -45,6 +57,8 @@ namespace ai
         bool HandlePOI(Event& event, Player* requester, const std::string& text);
         bool HandleMotion(Event& event, Player* requester, const std::string& text);
         bool HandleTransport(Event& event, Player* requester, const std::string& text);
+        bool HandlePointOnTrans(Event& event, Player* requester, const std::string& text);
+        bool HandleDoTransport(Event& event, Player* requester, const std::string& text);
         bool HandleOnTrans(Event& event, Player* requester, const std::string& text);
         bool HandleOffTrans(Event& event, Player* requester, const std::string& text);
         bool HandlePathable(Event& event, Player* requester, const std::string& text);
@@ -53,6 +67,8 @@ namespace ai
         bool HandleCorpse(Event& event, Player* requester, const std::string& text);
         bool HandleLogoutTime(Event& event, Player* requester, const std::string& text);
         bool HandleLevel(Event& event, Player* requester, const std::string& text);
+        bool HandleQuest(Event& event, Player* requester, const std::string& text);
+        bool HandlePosition(Event& event, Player* requester, const std::string& text);
         bool HandleNPC(Event& event, Player* requester, const std::string& text);
         bool HandleGO(Event& event, Player* requester, const std::string& text);
         bool HandleFind(Event& event, Player* requester, const std::string& text);
@@ -95,5 +111,13 @@ namespace ai
         bool HandleSounds(Event& event, Player* requester, const std::string& text);
         bool HandleDSound(Event& event, Player* requester, const std::string& text);
         bool HandleSound(Event& event, Player* requester, const std::string& text);
+        bool HandleStuck(Event& event, Player* requester, const std::string& text);
+        bool HandleCombat(Event& event, Player* requester, const std::string& text);
+        bool HandleNodes(Event& event, Player* requester, const std::string& text);
+        bool HandleActivity(Event& event, Player* requester, const std::string& text);
+        bool HandleTransanal(Event& event, Player* requester, const std::string& text);
+        bool HandleUpdownspace(Event& event, Player* requester, const std::string& text);
+        bool HandlePatharound(Event& event, Player* requester, const std::string& text);
+        bool HandleHeightForLos(Event& event, Player* requester, const std::string& text);
     };
 }

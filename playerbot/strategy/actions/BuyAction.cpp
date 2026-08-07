@@ -5,6 +5,7 @@
 #include "playerbot/strategy/values/ItemCountValue.h"
 #include "playerbot/strategy/values/BudgetValues.h"
 #include "playerbot/strategy/values/MountValues.h"
+#include "playerbot/strategy/values/GuildValues.h"
 
 using namespace ai;
 
@@ -74,7 +75,7 @@ bool BuyAction::Execute(Event& event)
                 // reputation discount 
                 uint32 price = uint32(floor(proto->BuyPrice * bot->GetReputationPriceDiscount(pCreature)));
 
-                auto pmo = sPerformanceMonitor.start(PERF_MON_VALUE, "IsWorthBuyingFromVendorToResellAtAH", &context->performanceStack);
+                auto pmo = sPerformanceMonitor.start(PERF_MON_VALUE, "IsWorthBuyingFromVendorToResellAtAH", ai);
 
                 // if item is worth selling to AH? 
                 bool canFlipAH = ItemUsageValue::IsWorthBuyingFromVendorToResellAtAH(proto, tItem->maxcount > 0);
@@ -151,6 +152,10 @@ bool BuyAction::Execute(Event& event)
                     if (usage == ItemUsage::ITEM_USAGE_USE && ItemUsageValue::CurrentStacks(ai, proto) >= 1)
                         break;
 
+                    // Stop buying reagents/recipes once we have 1 stack
+                    if (usage == ItemUsage::ITEM_USAGE_SKILL && ItemUsageValue::CurrentStacks(ai, proto) >= 1)
+                        break;
+
                     bool didBuy = false;
                     didBuy = BuyItem(requester, tItems, vendorguid, proto, bought, usage);
                     if (!didBuy)
@@ -161,6 +166,7 @@ bool BuyAction::Execute(Event& event)
                         break;
 
                     RESET_AI_VALUE2(ItemUsage, "item usage", tItem->item);
+                    RESET_AI_VALUE2(std::list<Item*>, "inventory items", ChatHelper::formatItem(proto));
                     RESET_AI_VALUE(std::vector<MountValue>, "mount list");
 
                     if (usage == ItemUsage::ITEM_USAGE_EQUIP || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP) //Equip upgrades and stop buying this time. 
@@ -170,6 +176,47 @@ bool BuyAction::Execute(Event& event)
                         break;
                     }
                 }
+            }
+
+            // Exception for crafting bots with guild order - Buy profession reagents from vendor first for more efficient crafting.
+            if (AI_VALUE(bool, "needs profession reagents"))
+            {
+                std::vector<uint32> missingReagents = NeedsProfessionReagentsValue::GetMissingReagents(ai);
+
+                for (uint32 reagentId : missingReagents)
+                {
+                    const ItemPrototype* reagentProto = sObjectMgr.GetItemPrototype(reagentId);
+                    if (!reagentProto)
+                        continue;
+
+                    uint32 maxStack = reagentProto->GetMaxStackSize();
+                    uint32 currentCount = ai->GetInventoryItemsCountWithId(reagentId);
+                    if (currentCount >= maxStack)
+                        continue;
+
+                    uint32 reagentPrice = uint32(floor(reagentProto->BuyPrice * bot->GetReputationPriceDiscount(pCreature)));
+
+                    while (currentCount < maxStack)
+                    {
+                        RESET_AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::tradeskill);
+                        uint32 money = AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::tradeskill);
+                        if (reagentPrice > money)
+                            break;
+
+                        bool didBuy = BuyItem(requester, tItems, vendorguid, reagentProto, bought, ItemUsage::ITEM_USAGE_SKILL);
+                        if (!didBuy)
+                            didBuy = BuyItem(requester, vItems, vendorguid, reagentProto, bought, ItemUsage::ITEM_USAGE_SKILL);
+
+                        result |= didBuy;
+                        if (!didBuy)
+                            break;
+
+                        currentCount = ai->GetInventoryItemsCountWithId(reagentId);
+                        RESET_AI_VALUE2(std::list<Item*>, "inventory items", ChatHelper::formatItem(reagentProto));
+                    }
+                }
+
+                RESET_AI_VALUE(bool, "needs profession reagents");
             }
         }
         else

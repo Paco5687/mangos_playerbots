@@ -11,7 +11,20 @@ namespace ai
         virtual bool Execute(Event& event) override
         {
             Player* master = event.getOwner();
-            return Invite(bot, master);
+            std::string param = event.getParam();
+            
+            Player* target = nullptr;
+            if (!param.empty())
+            {
+                target = sObjectMgr.GetPlayer(param.c_str());
+            }
+            
+            if (!target)
+            {
+                target = master;
+            }
+            
+            return Invite(bot, target);
         }
 
         virtual bool Invite(Player* inviter, Player* player);
@@ -30,6 +43,10 @@ namespace ai
     {
     public:
         LfgAction(PlayerbotAI* ai, std::string name = "lfg") : InviteToGroupAction(ai, name) {}
+
+        static std::unordered_map<uint8, std::unordered_map<BotRoles, uint32>> AllowedClassRoleNr(uint8 groupSize = 5);
+        static std::unordered_map<uint8, std::unordered_map<BotRoles, uint32>> AllowedClassRoleNr(Player* player, uint8 groupSize = 5);
+
         virtual bool Execute(Event& event) override;
         virtual bool isUsefulWhenStunned() override { return true; }
     };
@@ -39,7 +56,7 @@ namespace ai
     public:
         InviteNearbyToGroupAction(PlayerbotAI* ai, std::string name = "invite nearby") : InviteToGroupAction(ai, name) {}
         virtual bool Execute(Event& event) override;
-        virtual bool isUseful();
+        virtual bool isUseful() override;
         virtual bool isUsefulWhenStunned() override { return true; }
     };
 
@@ -60,7 +77,7 @@ namespace ai
     public:
         InviteGuildToGroupAction(PlayerbotAI* ai, std::string name = "invite guild") : InviteNearbyToGroupAction(ai, name) {}
         virtual bool Execute(Event& event) override;
-        virtual bool isUseful() { return bot->GetGuildId() && InviteNearbyToGroupAction::isUseful(); };
+        virtual bool isUseful() override { return bot->GetGuildId() && InviteNearbyToGroupAction::isUseful(); };
 
     private:
         std::vector<Player*> getGuildMembers();

@@ -1433,7 +1433,17 @@ public:
             (actionName == "attack anything") ||
             (actionName == "choose rpg target") ||
             (actionName == "move to rpg target") ||
-            (actionName == "travel"))
+            (actionName == "move to travel target") ||
+            (actionName == "choose travel target") ||
+            (actionName == "reset travel target") ||
+            (actionName == "bg move to start") ||
+            (actionName == "bg move to objective") ||
+            (actionName == "bg check objective") ||
+            (actionName == "bg check flag") ||
+            (actionName == "attack enemy flag carrier") ||
+            (actionName == "travel") ||
+            (actionName == "move to suppression device") ||
+            (actionName == "disarm suppression device"))
         {
             return 1.0f;
         }

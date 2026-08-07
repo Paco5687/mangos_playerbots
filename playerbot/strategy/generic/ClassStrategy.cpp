@@ -22,11 +22,11 @@ void ClassStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "combat long stuck",
-        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE - 0.1f), NULL)));
+        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE), NULL)));
 
     triggers.push_back(new TriggerNode(
         "combat stuck",
-        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE - 0.3f), NULL)));
+        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE), NULL)));
 }
 
 void ClassStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -151,7 +151,7 @@ void AoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         NextAction::array(0, new NextAction("goblin sapper", ACTION_HIGH + 1), NULL)));
 
     triggers.push_back(new TriggerNode(
-        "ranged medium aoe",
+        "ranged high aoe",
         NextAction::array(0, new NextAction("throw grenade", ACTION_HIGH), NULL)));
 }
 
@@ -492,11 +492,11 @@ void ClassStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "combat long stuck",
-        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE - 0.1f), NULL)));
+        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE), NULL)));
 
     triggers.push_back(new TriggerNode(
         "combat stuck",
-        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE - 0.3f), NULL)));
+        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE), NULL)));
 }
 
 void ClassStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -619,7 +619,7 @@ void AoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         NextAction::array(0, new NextAction("goblin sapper", ACTION_HIGH + 1), NULL)));
 
     triggers.push_back(new TriggerNode(
-        "ranged medium aoe",
+        "ranged high aoe",
         NextAction::array(0, new NextAction("throw grenade", ACTION_HIGH), NULL)));
 }
 
@@ -963,11 +963,11 @@ void ClassStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "combat long stuck",
-        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE - 0.1f), NULL)));
+        NextAction::array(0, new NextAction("unstuck", static_cast<float>(ACTION_IDLE) - 0.1f), NULL)));
 
     triggers.push_back(new TriggerNode(
         "combat stuck",
-        NextAction::array(0, new NextAction("unstuck", ACTION_IDLE - 0.3f), NULL)));
+        NextAction::array(0, new NextAction("unstuck", static_cast<float>(ACTION_IDLE) - 0.3f), NULL)));
 }
 
 void ClassStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -1090,7 +1090,7 @@ void AoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         NextAction::array(0, new NextAction("goblin sapper", ACTION_HIGH + 1), NULL)));
 
     triggers.push_back(new TriggerNode(
-        "ranged medium aoe",
+        "ranged high aoe",
         NextAction::array(0, new NextAction("throw grenade", ACTION_HIGH), NULL)));
 }
 

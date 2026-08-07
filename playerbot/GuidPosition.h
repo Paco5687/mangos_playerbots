@@ -19,6 +19,18 @@ namespace ai
         GuidPosition(HighGuid hi, uint32 entry, uint32 counter = 1, WorldPosition pos = WorldPosition()) : ObjectGuid(hi, entry, counter), WorldPosition(pos) {};
         GuidPosition(std::string qualifier);
 
+        enum CreationMask
+        {
+            NONE = 0,
+            COORDINATES = 1 << 0,
+            GAMETELE = 1 << 1,
+            CREATURE_GUID = 1 << 2,
+            OBJECT_GUID = 1 << 3,
+            UNKNOWN = (COORDINATES | GAMETELE | CREATURE_GUID | OBJECT_GUID)
+        };
+
+        GuidPosition(CreationMask type, const std::string& qualifier, const WorldPosition& referencePos = WorldPosition(), uint32 instanceId = 0);
+
         virtual std::string to_string() const override;
 
         CreatureData* GetCreatureData() const { return IsCreature() ? sObjectMgr.GetCreatureData(GetCounter()) : nullptr; }
@@ -94,7 +106,7 @@ namespace ai
         AsyncGuidPosition(GuidPosition guidP) : GuidPosition(guidP) {};
         virtual void setAreaFlag(int16 flag) { areaFlag = flag; }
         virtual void FetchArea() { areaFlag = WorldPosition::getAreaFlag(); }
-        virtual uint16 getAreaFlag() const { return areaFlag.has_value() ? areaFlag.value() : WorldPosition::getAreaFlag(); }
+        virtual uint16 getAreaFlag() const override { return areaFlag.has_value() ? areaFlag.value() : WorldPosition::getAreaFlag(); }
     private:
         std::optional<int16> areaFlag;
     };

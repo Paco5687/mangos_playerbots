@@ -4,6 +4,7 @@
 #include "TalkToQuestGiverAction.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/QuestValues.h"
+#include "playerbot/strategy/values/GuildValues.h"
 
 using namespace ai;
 
@@ -158,6 +159,18 @@ ItemIds TalkToQuestGiverAction::BestRewards(Quest const* quest)
     }
     else
     {
+        uint32 guildShareRewardItemId = AI_VALUE(uint32, "guild share quest reward item");
+        if (guildShareRewardItemId)
+        {
+            for (uint8 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
+            {
+                if (quest->RewChoiceItemId[i] == guildShareRewardItemId)
+                {
+                    return { i };
+                }
+            }
+        }
+
         for (uint8 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
         {
             ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", quest->RewChoiceItemId[i]);
@@ -219,16 +232,16 @@ void TalkToQuestGiverAction::RewardMultipleItem(Player* requester, Quest const* 
     }
     else
     {
-        // Try to pick the usable item. If multiple list usable rewards.
+        // Try to pick the usable item. If multiple, list usable rewards.
         bestIds = BestRewards(quest);
-        if (bestIds.size() > 0)
+        if (bestIds.size() > 1)
         {
             AskToSelectReward(requester, quest, out, true);
         }
         else
         {
-            //Pick the first item
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[*bestIds.begin()]);
+            uint32 rewardIndex = bestIds.empty() ? 0 : *bestIds.begin();
+            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[rewardIndex]);
             if (proto)
             {
                 args["%item"] = chat->formatItem(proto);
@@ -237,7 +250,7 @@ void TalkToQuestGiverAction::RewardMultipleItem(Player* requester, Quest const* 
                 BroadcastHelper::BroadcastQuestTurnedIn(ai, bot, quest);
             }
 
-            bot->RewardQuest(quest, *bestIds.begin(), questGiver, true);
+            bot->RewardQuest(quest, rewardIndex, questGiver, true);
         }
     }
 }

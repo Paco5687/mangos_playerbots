@@ -36,9 +36,9 @@ class ServerFacade
             return unit->IsDead();
 #endif
         }
-
+        float GetDistance(Unit *unit, WorldObject* wo);
         float GetDistance2d(Unit *unit, WorldObject* wo);
-
+        float GetDistance(Unit *unit, float x, float y, float z);
         float GetDistance2d(Unit *unit, float x, float y);
 
         DeathState GetDeathState(Unit *unit)
@@ -180,6 +180,17 @@ class ServerFacade
             return player->SendMessageToSet(packet, self);
 #endif
         }
+
+        CreatureInfo const* LookupCreatureInfo(uint32 creatureId)
+        {
+#ifdef MANGOS
+            return sCreatureStore.LookupEntry(creatureId);
+#endif
+#ifdef CMANGOS
+            return sCreatureStorage.LookupEntry<CreatureInfo>(creatureId);
+#endif
+        } 
+        
 
         SpellEntry const* LookupSpellInfo(uint32 spellId)
         {

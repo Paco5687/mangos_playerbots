@@ -59,14 +59,14 @@ class RandomPlayerbotMgr : public PlayerbotHolder
 {
     public:
         RandomPlayerbotMgr();
-        virtual ~RandomPlayerbotMgr();
+        virtual ~RandomPlayerbotMgr() override;
         static RandomPlayerbotMgr& instance()
         {
             static RandomPlayerbotMgr instance;
             return instance;
         }
 
-        virtual void UpdateAIInternal(uint32 elapsed, bool minimal = false);
+        virtual void UpdateAIInternal(uint32 elapsed, bool minimal = false) override;
 private:
         void ScaleBotActivity();
         void LogPlayerLocation();
@@ -145,6 +145,8 @@ public:
         static InventoryResult CanEquipUnseenItem(Player* player, uint8 slot, uint16& dest, uint32 item);
 
         bool AddRandomBot(uint32 bot);
+        bool CreateRandomBot(const std::string& name, uint8 race, uint8 cls, uint32 level);
+        bool DeleteRandomBot(ObjectGuid guid);
         virtual void MovePlayerBot(uint32 guid, PlayerbotHolder* newHolder) override;
 
         std::map<Team, std::map<BattleGroundTypeId, std::list<uint32> > > getBattleMastersCache() { return BattleMastersCache; }
@@ -166,8 +168,8 @@ public:
             auto it = ahMirror.find(itemId);
             return (it != ahMirror.end()) ? it->second : emptyVector;}
         uint32 GetPlayersLevel() { return playersLevel; }
-	protected:
-	    virtual void OnBotLoginInternal(Player * const bot);
+    protected:
+        virtual void OnBotLoginInternal(Player * const bot) override;
     private:
         //pid values are set in constructor
         botPID pid = botPID(1, 50, -50, 0, 0, 0);
@@ -190,7 +192,37 @@ public:
         void RandomTeleport(Player* bot, std::vector<WorldLocation> &locs, bool hearth = false, bool activeOnly = false);
         uint32 GetZoneLevel(uint16 mapId, float teleX, float teleY, float teleZ);
         void PrepareTeleportCache();
-        typedef void (RandomPlayerbotMgr::*ConsoleCommandHandler) (Player*);
+        typedef std::list<std::string> (RandomPlayerbotMgr::*ConsoleCommandHandler) (std::string param);
+        typedef std::list<std::string> (RandomPlayerbotMgr::*ConsolePlayerCommandHandler) (Player*);
+
+        std::string consoleCmdParams;
+
+        std::list<std::string> HandleHelp(std::string param);
+        std::list<std::string> HandleConsoleReset(std::string param);
+        std::list<std::string> HandleConsoleStats(std::string param);
+        std::list<std::string> HandleConsoleReload(std::string param);
+        std::list<std::string> HandleConsoleUpdate(std::string param);
+        std::list<std::string> HandleConsolePid(std::string param);
+        std::list<std::string> HandleConsoleDiff(std::string param);
+        std::list<std::string> HandleConsoleCleanMap(std::string param);
+        std::list<std::string> HandleConsoleLoginDebug(std::string param);
+        std::list<std::string> HandleConsolePathCheck(std::string param);
+        // Override virtual methods from PlayerbotHolder
+        virtual uint32 GetOrCreateAccount(Player* master, std::string& error) override;
+        virtual void OnBotDeleted(uint32 botGuid, uint32 accountId) override;
+
+    public:
+        static std::string GetCommandTexts(const std::string& command);
+        static std::unordered_map<std::string, std::string> GetCommandTexts();
+        std::list<std::string> HandleRandomizeFirst(Player* bot);
+        std::list<std::string> HandleUpdateGearSpells(Player* bot);
+        std::list<std::string> HandleRefresh(Player* bot);
+        std::list<std::string> HandleRandomTeleportForLevel(Player* bot);
+        std::list<std::string> HandleRandomTeleportForRpg(Player* bot);
+        std::list<std::string> HandleRevive(Player* bot);
+        std::list<std::string> HandleRandomTeleport(Player* bot);
+        std::list<std::string> HandleChangeStrategy(Player* bot);
+        std::list<std::string> HandleRemove(Player* bot);
 
         void MirrorAh();
     private:
@@ -208,6 +240,7 @@ public:
         std::list<uint32> arenaTeamMembers;
         uint32 bgBotsCount;
         uint32 playersLevel = 0;
+        uint32 botCount = 0;
         uint32 activeBots = 0;        
 
         std::unordered_map<uint32, std::vector<std::pair<int32,int32>>> playerBotMoveLog;

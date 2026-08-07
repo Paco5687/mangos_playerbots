@@ -35,7 +35,11 @@ private:
     static ActionNode* abolish_poison(PlayerbotAI* ai)
     {
         return new ActionNode("abolish poison",
-            /*P*/ NextAction::array(0, new NextAction("caster form"), NULL),
+#ifdef MANGOSBOT_TWO
+            /*P*/ NextAction::array(0, new NextAction("balance or restoration caster form"), NULL),
+#else
+            /*P*/ NextAction::array(0, new NextAction("restoration caster form"), NULL),
+#endif
             /*A*/ NextAction::array(0, new NextAction("cure poison"), NULL),
             /*C*/ NULL);
     }
@@ -43,7 +47,11 @@ private:
     static ActionNode* abolish_poison_on_party(PlayerbotAI* ai)
     {
         return new ActionNode("abolish poison on party",
-            /*P*/ NextAction::array(0, new NextAction("caster form"), NULL),
+#ifdef MANGOSBOT_TWO
+            /*P*/ NextAction::array(0, new NextAction("balance or restoration caster form"), NULL),
+#else
+            /*P*/ NextAction::array(0, new NextAction("restoration caster form"), NULL),
+#endif
             /*A*/ NextAction::array(0, new NextAction("cure poison on party"), NULL),
             /*C*/ NULL);
     }
@@ -56,35 +64,46 @@ private:
             /*C*/ NULL);
     }
 
+#ifdef MANGOSBOT_TWO
+    ACTION_NODE_P(remove_curse, "remove curse", "balance or restoration caster form");
+    ACTION_NODE_P(remove_curse_on_party, "remove curse on party", "balance or restoration caster form");
+#elif MANGOSBOT_ONE
+    ACTION_NODE_P(remove_curse, "remove curse", "balance caster form");
+    ACTION_NODE_P(remove_curse_on_party, "remove curse on party", "balance caster form");
+#else
     ACTION_NODE_P(remove_curse, "remove curse", "caster form");
-
     ACTION_NODE_P(remove_curse_on_party, "remove curse on party", "caster form");
+#endif
 
-    ACTION_NODE_P(hibernate_on_cc, "hibernate on cc", "caster form");
+    ACTION_NODE_P(hibernate_on_cc, "hibernate on cc", "balance caster form");
 
-    ACTION_NODE_P(rebirth, "rebirth", "caster form");
+    ACTION_NODE_P(rebirth, "rebirth", "restoration caster form");
 
-    ACTION_NODE_P(regrowth, "regrowth", "caster form");
+    ACTION_NODE_P(regrowth, "regrowth", "restoration caster form");
 
-    ACTION_NODE_P(regrowth_on_party, "regrowth on party", "caster form");
+    ACTION_NODE_P(regrowth_on_party, "regrowth on party", "restoration caster form");
 
+#ifdef MANGOSBOT_TWO
+    ACTION_NODE_P(healing_touch, "healing touch", "restoration caster form");
+    ACTION_NODE_P(healing_touch_on_party, "healing touch on party", "restoration caster form");
+    ACTION_NODE_P(thorns, "thorns", "restoration caster form");
+    ACTION_NODE_P(thorns_on_party, "thorns on party", "restoration caster form");
+    ACTION_NODE_P(mark_of_the_wild, "mark of the wild", "restoration caster form");
+    ACTION_NODE_P(mark_of_the_wild_on_party, "mark of the wild on party", "restoration caster form");
+    ACTION_NODE_P(gift_of_the_wild_on_party, "gift of the wild on party", "restoration caster form");
+#else
     ACTION_NODE_P(healing_touch, "healing touch", "caster form");
-
     ACTION_NODE_P(healing_touch_on_party, "healing touch on party", "caster form");
-
-    ACTION_NODE_P(rejuvenation, "rejuvenation", "caster form");
-
-    ACTION_NODE_P(rejuvenation_on_party, "rejuvenation on party", "caster form");
-
     ACTION_NODE_P(thorns, "thorns", "caster form");
-
     ACTION_NODE_P(thorns_on_party, "thorns on party", "caster form");
-
     ACTION_NODE_P(mark_of_the_wild, "mark of the wild", "caster form");
-
     ACTION_NODE_P(mark_of_the_wild_on_party, "mark of the wild on party", "caster form");
-
     ACTION_NODE_P(gift_of_the_wild_on_party, "gift of the wild on party", "caster form");
+#endif
+
+    ACTION_NODE_P(rejuvenation, "rejuvenation", "restoration caster form");
+
+    ACTION_NODE_P(rejuvenation_on_party, "rejuvenation on party", "restoration caster form");
 
     ACTION_NODE_P(cat_form, "cat form", "caster form");
 
@@ -133,7 +152,7 @@ void DruidPvpStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "player has flag",
-        NextAction::array(0, new NextAction("travel form", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("travel form", ACTION_EMERGENCY), NULL)));
 }
 
 void DruidPvpStrategy::InitReactionTriggers(std::list<TriggerNode*>& triggers)
@@ -358,11 +377,11 @@ void DruidBuffStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "gift of the wild on party",
-        NextAction::array(0, new NextAction("gift of the wild on party", ACTION_NORMAL + 3), NULL)));
+        NextAction::array(0, new NextAction("gift of the wild on party", ACTION_NORMAL + 5), NULL)));
 
     triggers.push_back(new TriggerNode(
         "mark of the wild on party",
-        NextAction::array(0, new NextAction("mark of the wild on party", ACTION_NORMAL + 2), NULL)));
+        NextAction::array(0, new NextAction("mark of the wild on party", ACTION_NORMAL + 3), NULL)));
 
     triggers.push_back(new TriggerNode(
         "thorns on party",
@@ -510,6 +529,68 @@ void DruidOffhealRaidStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tr
     OffhealRaidStrategy::InitNonCombatTriggers(triggers);
 }
 
+void DruidOffdpsStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    OffdpsStrategy::InitCombatTriggers(triggers);
+
+    triggers.push_back(new TriggerNode(
+        "faerie fire",
+        NextAction::array(0, new NextAction("faerie fire", ACTION_NORMAL + 3), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "insect swarm",
+        NextAction::array(0, new NextAction("insect swarm", ACTION_NORMAL + 2), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "moonfire",
+        NextAction::array(0, new NextAction("moonfire", ACTION_NORMAL + 1), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "wrath",
+        NextAction::array(0, new NextAction("wrath", ACTION_NORMAL), NULL)));
+}
+
+void DruidOffdpsStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    OffdpsStrategy::InitNonCombatTriggers(triggers);
+}
+
+void DruidOffdpsPvpStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    DruidOffdpsStrategy::InitCombatTriggers(triggers);
+    OffdpsPvpStrategy::InitCombatTriggers(triggers);
+}
+
+void DruidOffdpsPvpStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    DruidOffdpsStrategy::InitNonCombatTriggers(triggers);
+    OffdpsPvpStrategy::InitNonCombatTriggers(triggers);
+}
+
+void DruidOffdpsPveStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    DruidOffdpsStrategy::InitCombatTriggers(triggers);
+    OffdpsPveStrategy::InitCombatTriggers(triggers);
+}
+
+void DruidOffdpsPveStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    DruidOffdpsStrategy::InitNonCombatTriggers(triggers);
+    OffdpsPveStrategy::InitNonCombatTriggers(triggers);
+}
+
+void DruidOffdpsRaidStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    DruidOffdpsStrategy::InitCombatTriggers(triggers);
+    OffdpsRaidStrategy::InitCombatTriggers(triggers);
+}
+
+void DruidOffdpsRaidStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    DruidOffdpsStrategy::InitNonCombatTriggers(triggers);
+    OffdpsRaidStrategy::InitNonCombatTriggers(triggers);
+}
+
 #endif
 #ifdef MANGOSBOT_ONE // TBC
 
@@ -548,7 +629,7 @@ void DruidPvpStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "player has flag",
-        NextAction::array(0, new NextAction("travel form", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("travel form", ACTION_EMERGENCY), NULL)));
 }
 
 void DruidPvpStrategy::InitReactionTriggers(std::list<TriggerNode*>& triggers)
@@ -768,11 +849,11 @@ void DruidBuffStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "gift of the wild on party",
-        NextAction::array(0, new NextAction("gift of the wild on party", ACTION_NORMAL + 3), NULL)));
+        NextAction::array(0, new NextAction("gift of the wild on party", ACTION_NORMAL + 5), NULL)));
 
     triggers.push_back(new TriggerNode(
         "mark of the wild on party",
-        NextAction::array(0, new NextAction("mark of the wild on party", ACTION_NORMAL + 2), NULL)));
+        NextAction::array(0, new NextAction("mark of the wild on party", ACTION_NORMAL + 3), NULL)));
 
     triggers.push_back(new TriggerNode(
         "thorns on party",
@@ -958,7 +1039,7 @@ void DruidPvpStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "player has flag",
-        NextAction::array(0, new NextAction("travel form", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("travel form", ACTION_EMERGENCY), NULL)));
 }
 
 void DruidPvpStrategy::InitReactionTriggers(std::list<TriggerNode*>& triggers)
@@ -1182,11 +1263,11 @@ void DruidBuffStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "gift of the wild on party",
-        NextAction::array(0, new NextAction("gift of the wild on party", ACTION_NORMAL + 3), NULL)));
+        NextAction::array(0, new NextAction("gift of the wild on party", ACTION_NORMAL + 5), NULL)));
 
     triggers.push_back(new TriggerNode(
         "mark of the wild on party",
-        NextAction::array(0, new NextAction("mark of the wild on party", ACTION_NORMAL + 2), NULL)));
+        NextAction::array(0, new NextAction("mark of the wild on party", ACTION_NORMAL + 3), NULL)));
 
     triggers.push_back(new TriggerNode(
         "thorns on party",

@@ -16,6 +16,14 @@ bool CheckMountStateAction::Execute(Event& event)
     Player* requester = event.getOwner() ? event.getOwner() : GetMaster();
     Player* groupMaster = ai->GetGroupMaster();
 
+    if (bot->IsMounted() && (bot->GetTransport() || bot->IsTaxiFlying() || bot->IsBeingTeleported()))
+    {
+        if (ai->HasStrategy("debug mount", BotState::BOT_STATE_NON_COMBAT))
+            ai->TellPlayerNoFacing(requester, "Unmount. On a taxi or a boat/zeppelin.");
+
+        return UnMount();
+    }
+
     bool hasAttackers = AI_VALUE(bool, "has attackers");
     bool hasEnemy = AI_VALUE(bool, "has enemy player targets") || AI_VALUE(Unit*, "dps target");
 
@@ -62,8 +70,8 @@ bool CheckMountStateAction::Execute(Event& event)
         }
     }
 
-    //Unmounted when able to attack target
-    if (canAttackTarget)
+    //Unmounted when able to attack target and not fleeing
+    if (canAttackTarget && !ai->HasStrategy("passive", BotState::BOT_STATE_COMBAT))
     {
         if (ai->HasStrategy("debug mount", BotState::BOT_STATE_NON_COMBAT) && IsMounted)
             ai->TellPlayerNoFacing(requester, "Unmount. Able to attack target.");
@@ -84,7 +92,10 @@ bool CheckMountStateAction::Execute(Event& event)
     }
 
     //Following master and close to master that is unmounted.
-    if (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) && groupMaster && groupMaster != bot && !farFromMaster && !IsLeaderMounted)
+    if ((ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+        ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)) &&
+        groupMaster && groupMaster != bot &&
+        !farFromMaster && !IsLeaderMounted)
     {
         if (ai->HasStrategy("debug mount", BotState::BOT_STATE_NON_COMBAT) && IsMounted)
             ai->TellPlayerNoFacing(requester, "Unmount. Near umounted group master.");
@@ -144,7 +155,9 @@ bool CheckMountStateAction::Execute(Event& event)
         return UnMount();
     }
 
-    if (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) && groupMaster && groupMaster != bot)
+    if ((ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+        ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)) &&
+        groupMaster && groupMaster != bot)
     {
         //Mounting with master.
         if (IsLeaderMounted && !hasAttackers)
@@ -270,11 +283,13 @@ bool CheckMountStateAction::isUseful()
     if (!bot->IsMounted() && bot->IsInWater())
         return false;
 
-    // Do not use with BG Flags
+    // Do not use with BG Flags, except forms like "Travel Form" and "Ghost Wolf"
     if (bot->HasAura(23333) || bot->HasAura(23335) || bot->HasAura(34976))
-    {
+{
+    if (!bot->HasSpell(783) && !bot->HasSpell(2645))
         return false;
-    }
+}
+
 
     // Only mount if BG starts in less than 30 sec
     if (bot->InBattleGround())
@@ -378,7 +393,17 @@ float CheckMountStateAction::GetAttackDistance() const
 
 bool CheckMountStateAction::Mount(Player* requester, bool limitSpeedToGroup)
 {
-    bool canFly = CanFly();   
+#ifdef MANGOSBOT_ZERO
+    bool canFly = CanFly();
+#else
+    Player* groupMaster = ai->GetGroupMaster();
+
+    // only use a flying mount if master has a flying mount, to avoid laggards on ground (TBC flying is 60% ground speed)
+    bool canFly = groupMaster && groupMaster != bot ? CanFly() && (groupMaster->HasAuraType(SPELL_AURA_FLY) || 
+        groupMaster->HasAuraType(SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED)) : CanFly();
+    if (ai->HasStrategy("debug mount", BotState::BOT_STATE_NON_COMBAT))
+        ai->TellPlayerNoFacing(requester, canFly ? "I should fly" : "I shouldn't fly");
+#endif
 
     uint32 currentSpeed = AI_VALUE2(uint32, "current mount speed", "self target");
 
@@ -392,13 +417,17 @@ bool CheckMountStateAction::Mount(Player* requester, bool limitSpeedToGroup)
             if (member == bot)
                 continue;
 
+            if (!ai->IsSafe(member))
+                continue;
+
             if (!member->GetPlayerbotAI())
                 continue;
 
             if (!member->IsAlive())
                 continue;
 
-            if (!member->GetPlayerbotAI()->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+            if (!(member->GetPlayerbotAI()->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+                member->GetPlayerbotAI()->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)))
                 continue;
 
             if (WorldPosition(bot).distance(member) > sPlayerbotAIConfig.reactDistance * 5)

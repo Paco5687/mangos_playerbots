@@ -35,7 +35,7 @@ private:
 
     ACTION_NODE_A(heroic_throw_taunt, "heroic throw", "taunt");
 
-    ACTION_NODE_A(taunt, "taunt", "battle shout taunt");
+    ACTION_NODE_A(taunt, "taunt", "mocking blow");
 
     ACTION_NODE_A(berserker_rage_fear, "berserker rage", "death wish");
 };
@@ -72,9 +72,9 @@ void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
         "has greater blessing of salvation",
         NextAction::array(0, new NextAction("remove greater blessing of salvation", ACTION_EMERGENCY), NULL)));
 
-    triggers.push_back(new TriggerNode(
-        "enemy out of melee",
-        NextAction::array(0, new NextAction("heroic throw", ACTION_MOVE + 8), new NextAction("charge", ACTION_MOVE + 7), NULL)));
+    //triggers.push_back(new TriggerNode(
+        //"enemy out of melee",
+        //NextAction::array(0, new NextAction("heroic throw", ACTION_MOVE + 8), new NextAction("charge", ACTION_MOVE + 7), NULL)));
 
     triggers.push_back(new TriggerNode(
         "intercept and rage",
@@ -86,19 +86,19 @@ void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
 
     triggers.push_back(new TriggerNode(
         "lose aggro",
-        NextAction::array(0, new NextAction("heroic throw taunt", ACTION_MOVE + 4), NULL)));
+        NextAction::array(0, new NextAction("taunt", ACTION_PASSTROUGH), NULL)));
 
-    triggers.push_back(new TriggerNode(
-        "taunt on snare target",
-        NextAction::array(0, new NextAction("heroic throw on snare target", ACTION_MOVE), NULL)));
+    //triggers.push_back(new TriggerNode(
+        //"taunt on snare target",
+        //NextAction::array(0, new NextAction("heroic throw on snare target", ACTION_MOVE), NULL)));
 
     triggers.push_back(new TriggerNode(
         "demoralizing shout",
-        NextAction::array(0, new NextAction("demoralizing shout", ACTION_HIGH + 4), NULL)));
+        NextAction::array(0, new NextAction("demoralizing shout", ACTION_HIGH + 6), NULL)));
 
     triggers.push_back(new TriggerNode(
         "shield block",
-        NextAction::array(0, new NextAction("shield block", ACTION_HIGH + 3), NULL)));
+        NextAction::array(0, new NextAction("shield block", ACTION_HIGH + 5), NULL)));
 
     triggers.push_back(new TriggerNode(
         "sunder armor",
@@ -106,23 +106,23 @@ void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
 
     triggers.push_back(new TriggerNode(
         "revenge",
-        NextAction::array(0, new NextAction("revenge", ACTION_HIGH + 1), NULL)));
+        NextAction::array(0, new NextAction("revenge", ACTION_HIGH + 3), NULL)));
 
     triggers.push_back(new TriggerNode(
         "light rage available",
-        NextAction::array(0, new NextAction("shield slam", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("shield slam", ACTION_HIGH + 4), NULL)));
 
     triggers.push_back(new TriggerNode(
         "bloodthirst",
-        NextAction::array(0, new NextAction("bloodthirst", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("bloodthirst", ACTION_HIGH + 4), NULL)));
 
     triggers.push_back(new TriggerNode(
         "mortal strike",
-        NextAction::array(0, new NextAction("mortal strike", ACTION_HIGH), NULL)));
+        NextAction::array(0, new NextAction("mortal strike", ACTION_HIGH + 4), NULL)));
 
     triggers.push_back(new TriggerNode(
         "heroic strike",
-        NextAction::array(0, new NextAction("heroic strike", ACTION_NORMAL + 2), NULL)));
+        NextAction::array(0, new NextAction("heroic strike", ACTION_HIGH + 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "disarm",
@@ -472,9 +472,9 @@ void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
         "protect party member",
         NextAction::array(0, new NextAction("intervene", ACTION_EMERGENCY), NULL)));
 
-    triggers.push_back(new TriggerNode(
-        "enemy out of melee",
-        NextAction::array(0, new NextAction("heroic throw", ACTION_MOVE + 8), new NextAction("charge", ACTION_MOVE + 7), NULL)));
+    //triggers.push_back(new TriggerNode(
+        //"enemy out of melee",
+        //NextAction::array(0, new NextAction("heroic throw", ACTION_MOVE + 8), new NextAction("charge", ACTION_MOVE + 7), NULL)));
 
     triggers.push_back(new TriggerNode(
         "intercept and rage",
@@ -486,15 +486,15 @@ void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
 
     triggers.push_back(new TriggerNode(
         "lose aggro",
-        NextAction::array(0, new NextAction("heroic throw taunt", ACTION_MOVE + 4), NULL)));
+        NextAction::array(0, new NextAction("taunt", ACTION_PASSTROUGH), NULL)));
 
     triggers.push_back(new TriggerNode(
         "spell reflection",
         NextAction::array(0, new NextAction("spell reflection", ACTION_MOVE + 1), NULL)));
 
-    triggers.push_back(new TriggerNode(
-        "taunt on snare target",
-        NextAction::array(0, new NextAction("heroic throw on snare target", ACTION_MOVE), NULL)));
+    //triggers.push_back(new TriggerNode(
+        //"taunt on snare target",
+        //NextAction::array(0, new NextAction("heroic throw on snare target", ACTION_MOVE), NULL)));
 
     triggers.push_back(new TriggerNode(
         "demoralizing shout",
@@ -882,7 +882,7 @@ void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
 
     triggers.push_back(new TriggerNode(
         "lose aggro",
-        NextAction::array(0, new NextAction("heroic throw taunt", ACTION_MOVE + 4), NULL)));
+        NextAction::array(0, new NextAction("heroic throw taunt", ACTION_PASSTROUGH), NULL)));
 
     triggers.push_back(new TriggerNode(
         "spell reflection",

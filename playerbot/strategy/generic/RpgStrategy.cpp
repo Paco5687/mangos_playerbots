@@ -27,11 +27,11 @@ float RpgActionMultiplier::GetValue(Action* action)
 
 void RpgStrategy::OnStrategyAdded(BotState state)
 {
-    ai->ChangeStrategy("+rpg quest,+rpg vendor,+rpg explore,+rpg maintenance,+rpg player,+rpg bg,+rpg guild", state);
+    ai->ChangeStrategy("+rpg quest,+rpg vendor,+rpg explore,+rpg maintenance,+rpg player,+rpg bg,+rpg guild,+rpg bank", state);
 }
 void RpgStrategy::OnStrategyRemoved(BotState state) 
 {
-    ai->ChangeStrategy("-rpg quest,-rpg vendor,-rpg explore,-rpg maintenance,-rpg player,-rpg bg,-rpg guild", state);
+    ai->ChangeStrategy("-rpg quest,-rpg vendor,-rpg explore,-rpg maintenance,-rpg player,-rpg bg,-rpg guild,-rpg bank", state);
 }
 
 void RpgStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &triggers)
@@ -168,6 +168,27 @@ void RpgGuildStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "rpg buy petition",
         NextAction::array(0, new NextAction("rpg buy petition", 1.040f), NULL)));
+
+#ifndef MANGOSBOT_ZERO
+    triggers.push_back(new TriggerNode(
+        "rpg guild bank deposit",
+        NextAction::array(0, new NextAction("rpg guild bank deposit", 1.050f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "rpg guild bank withdraw",
+        NextAction::array(0, new NextAction("rpg guild bank withdraw", 1.045f), NULL)));
+#endif
+}
+
+void RpgBankStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    triggers.push_back(new TriggerNode(
+        "rpg bank deposit",
+        NextAction::array(0, new NextAction("rpg bank deposit", 1.080f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "rpg bank withdraw",
+        NextAction::array(0, new NextAction("rpg bank withdraw", 1.075f), NULL)));
 }
 
 void RpgBgStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

@@ -54,8 +54,9 @@ namespace ai
         GatherMining = 1 << 15,
         GatherHerbalism = 1 << 16,
         GatherFishing = 1 << 17,
-        Explore = 1 << 18,
-        MaxFlag = 1 << 19
+        Bank = 1 << 18,
+        Explore = 1 << 19,
+        MaxFlag = 1 << 20
     };
 
     const std::unordered_map<TravelDestinationPurpose, std::string> TravelDestinationPurposeName =
@@ -80,6 +81,7 @@ namespace ai
         {TravelDestinationPurpose::GatherHerbalism, "GatherHerbalism"},
         {TravelDestinationPurpose::GatherFishing, "GatherFishing"},
         {TravelDestinationPurpose::Explore, "Explore"},
+        {TravelDestinationPurpose::Bank, "Bank"},
         {TravelDestinationPurpose::MaxFlag, "MaxFlag"}
     };
 
@@ -122,7 +124,7 @@ namespace ai
     public:
         FutureTravelDestinationsValue(PlayerbotAI* ai, std::string name = "future travel destinations") : ManualSetValue<FutureDestinations*>(ai, new FutureDestinations, name) {}
 
-        ~FutureTravelDestinationsValue() { delete value; }
+        ~FutureTravelDestinationsValue() override { delete value; }
     };
 
     class NoActiveTravelDestinationsValue : public ManualSetValue<bool>, public Qualified
@@ -138,6 +140,14 @@ namespace ai
 
         virtual bool Calculate() override;
     };
+
+    class TravelTargetReadyValue : public BoolCalculatedValue
+    {
+    public:
+        TravelTargetReadyValue(PlayerbotAI* ai, std::string name = "travel target ready", int checkInterval = 5) : BoolCalculatedValue(ai, name, checkInterval) {};
+
+        virtual bool Calculate() override;
+    };    
 
     class TravelTargetTravelingValue : public BoolCalculatedValue
     {

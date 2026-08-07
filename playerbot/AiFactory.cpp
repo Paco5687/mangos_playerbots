@@ -23,67 +23,29 @@ AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* a
     switch (player->getClass())
     {
         case CLASS_PRIEST:
-        {
             return new PriestAiObjectContext(ai);
-            break;
-        }
-
         case CLASS_MAGE:
-        {
             return new MageAiObjectContext(ai);
-            break;
-        }
-
         case CLASS_WARLOCK:
-        {
             return new WarlockAiObjectContext(ai);
-            break;
-        }
-
         case CLASS_WARRIOR:
-        {
             return new WarriorAiObjectContext(ai);
-            break;
-        }
-
         case CLASS_SHAMAN:
-        {
             return new ShamanAiObjectContext(ai);
-            break;
-        }
-
         case CLASS_PALADIN:
-        {
             return new PaladinAiObjectContext(ai);
-            break;
-        }
-
         case CLASS_DRUID:
-        {
             return new DruidAiObjectContext(ai);
-            break;
-        }
-
         case CLASS_HUNTER:
-        {
             return new HunterAiObjectContext(ai);
-            break;
-        }
-
         case CLASS_ROGUE:
-        {
             return new RogueAiObjectContext(ai);
-            break;
-        }
-
 #ifdef MANGOSBOT_TWO
         case CLASS_DEATH_KNIGHT:
-        {
             return new DKAiObjectContext(ai);
-            break;
-        }
 #endif
     }
+    
     return new AiObjectContext(ai);
 }
 
@@ -155,8 +117,10 @@ std::map<uint32, int32> AiFactory::GetPlayerSpecTabs(const Player* bot)
 
             uint32 spellid = talentInfo->RankID[rank];
             if (spellid && bot->HasSpell(spellid))
+            {
                 maxRank = rank + 1;
-
+                break;
+            }
         }
         tabs[talentTabInfo->tabpage] += maxRank;
     }
@@ -164,14 +128,12 @@ std::map<uint32, int32> AiFactory::GetPlayerSpecTabs(const Player* bot)
     return tabs;
 }
 
-BotRoles AiFactory::GetPlayerRoles(const Player* player)
+BotRoles AiFactory::GetPlayerRoles(uint8 cls, uint8 tab)
 {
     BotRoles role = BOT_ROLE_NONE;
-    int tab = GetPlayerSpecTab(player);
-    switch (player->getClass())
+    switch (cls)
     {
-        case CLASS_PRIEST:
-        {
+        case CLASS_PRIEST: {
             if (tab == 2)
             {
                 role = BOT_ROLE_DPS;
@@ -184,8 +146,7 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
             break;
         }
 
-        case CLASS_SHAMAN:
-        {
+        case CLASS_SHAMAN: {
             if (tab == 2)
             {
                 role = BOT_ROLE_HEALER;
@@ -198,9 +159,8 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
             break;
         }
 
-        case CLASS_WARRIOR:
-        {
-            if (tab == 2 || player->HasAura(71)) // Defensive stance
+        case CLASS_WARRIOR: {
+            if (tab == 2)
             {
                 role = BOT_ROLE_TANK;
             }
@@ -212,15 +172,14 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
             break;
         }
 
-        case CLASS_PALADIN:
-        {
-            if (tab == 1 || player->HasAura(25780)) // Righteous fury
+        case CLASS_PALADIN: {
+            if (tab == 1)
             {
                 role = BOT_ROLE_TANK;
             }
             else if (tab == 0)
             {
-                role = BOT_ROLE_HEALER;  
+                role = BOT_ROLE_HEALER;
             }
             else if (tab == 2)
             {
@@ -230,13 +189,8 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
             break;
         }
 
-        case CLASS_DRUID:
-        {
-            if (player->HasAura(5487) || player->HasAura(9634)) // Bear form, Dire bear form
-            {
-                role = BOT_ROLE_TANK;
-            }
-            else if (tab == 0)
+        case CLASS_DRUID: {
+            if (tab == 0)
             {
                 role = BOT_ROLE_DPS;
             }
@@ -253,13 +207,8 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
         }
 
 #ifdef MANGOSBOT_TWO
-        case CLASS_DEATH_KNIGHT:
-        {
-            if (player->HasAura(48263)) // Frost presence
-            {
-                role = BOT_ROLE_TANK;
-            }
-            else if (tab == 0)
+        case CLASS_DEATH_KNIGHT: {
+            if (tab == 0)
             {
                 role = BOT_ROLE_TANK;
             }
@@ -275,13 +224,67 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
             break;
         }
 #endif
-        default:
-        {
+        default: {
             role = BOT_ROLE_DPS;
             break;
         }
     }
 
+    return role;
+}
+
+BotRoles AiFactory::GetPlayerRoles(const Player* player)
+{
+    uint8 cls = player->getClass();
+    uint8 tab = GetPlayerSpecTab(player);
+
+    BotRoles role = BOT_ROLE_NONE;
+    switch (cls)
+    {
+        case CLASS_WARRIOR: {
+            if (tab == 2 || player->HasAura(71)) // Defensive stance
+            {
+                role = BOT_ROLE_TANK;
+            }
+            break;
+        }
+
+        case CLASS_PALADIN: {
+            if (tab == 1 || player->HasAura(25780)) // Righteous fury
+            {
+                role = BOT_ROLE_TANK;
+            }
+
+            break;
+        }
+
+        case CLASS_DRUID: {
+            if (player->HasAura(5487) || player->HasAura(9634)) // Bear form, Dire bear form
+            {
+                role = BOT_ROLE_TANK;
+            }
+
+            break;
+        }
+
+#ifdef MANGOSBOT_TWO
+        case CLASS_DEATH_KNIGHT: {
+            if (player->HasAura(48263)) // Frost presence
+            {
+                role = BOT_ROLE_TANK;
+            }
+
+            break;
+        }
+#endif
+        default: {
+            role = GetPlayerRoles(cls,tab);
+            break;
+        }
+    }
+
+    if (role == BOT_ROLE_NONE)
+        role = GetPlayerRoles(cls, tab);
 
     return role;
 }
@@ -292,6 +295,8 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 
     combatEngine->addStrategies("mount", NULL);
     combatEngine->addStrategy("avoid mobs");
+    combatEngine->addStrategy("dungeon");
+    combatEngine->addStrategy("avoid specific creatures");
 
     if (!player->InBattleGround())
     {
@@ -305,14 +310,20 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
             if (tab == 0)
             {
                 combatEngine->addStrategy("discipline");
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offheal");
             }
             else if (tab == 1)
             {
                 combatEngine->addStrategy("holy");
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offdps");
             }
             else
             {
                 combatEngine->addStrategy("shadow");
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offheal");
             }
 
             combatEngine->addStrategies("dps assist", "flee", "cure", "ranged", "cc", "buff", "aoe", "boost", NULL);
@@ -342,7 +353,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         {
             if (tab == 2)
             {
-                combatEngine->addStrategies("protection", "tank assist", "pull", "pull back", "mark rti", NULL);
+                combatEngine->addStrategies("protection", "tank assist", "pull", "pull back", "close", NULL);
             }
             else if (player->GetLevel() < 30 || tab == 0)
             {
@@ -362,14 +373,20 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
             if (tab == 0)
             {
                 combatEngine->addStrategies("elemental", "aoe", "cc", "flee", "ranged", NULL);
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offheal");
             }
             else if (tab == 2)
             {
                 combatEngine->addStrategies("restoration", "flee", "ranged", NULL);
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offdps");
             }
             else
             {
                 combatEngine->addStrategies("enhancement", "aoe", "cc", "close", NULL);
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offheal");
             }
 
             combatEngine->addStrategies("dps assist", "cure", "totems", "buff", "boost", NULL);
@@ -385,10 +402,14 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
             else if(tab == 0)
             {
                 combatEngine->addStrategies("holy", "dps assist", "flee", "ranged", NULL);
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offdps");
             }
             else
             {
                 combatEngine->addStrategies("retribution", "dps assist", "close", NULL);
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offheal");
             }
 
             combatEngine->addStrategies("cure", "aoe", "cc", "buff", "boost", "aura", "blessing", NULL);
@@ -399,15 +420,28 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         {
             if (tab == 1)
             {
-                combatEngine->addStrategies("tank feral", "tank assist", "pull", "pull back", "close", "behind", NULL);
+                if (player->HasSpell(16961) || player->HasSpell(16958))
+                {
+                    combatEngine->addStrategies("tank feral", "tank assist", "pull", "pull back", "close", NULL);
+                }
+                else
+                {
+                    combatEngine->addStrategies("dps feral", "dps assist", "close", "behind", NULL);
+                    if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                        combatEngine->addStrategy("offheal");
+                }
             }
             else if (tab == 2)
             {
                 combatEngine->addStrategies("restoration", "dps assist", "flee", "ranged", NULL);
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offdps");
             }
             else
             {
                 combatEngine->addStrategies("balance", "dps assist", "flee", "ranged", NULL);
+                if (sPlayerbotAIConfig.enableOffSpecStrategies)
+                    combatEngine->addStrategy("offheal");
             }
 
             combatEngine->addStrategies("cure", "aoe", "cc", "buff", "boost", NULL);
@@ -510,8 +544,19 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 
             if (player->getClass() == CLASS_DRUID && tab == 1 && urand(0, 100) > 50 && player->GetLevel() >= 20)
             {
-                combatEngine->addStrategies("dps feral", "close" "stealth", "behind", NULL);
-                combatEngine->removeStrategy("ranged");
+                if (player->HasSpell(16961) || player->HasSpell(16958))
+                {
+                    combatEngine->addStrategies("dps feral", "close", "stealth", "behind", NULL);
+                    combatEngine->removeStrategy("tank feral");
+                    combatEngine->removeStrategy("tank assist");
+                }
+                else
+                {
+                    combatEngine->addStrategies("tank feral", "tank assist", "close", NULL);
+                    combatEngine->removeStrategy("dps feral");
+                    combatEngine->removeStrategy("dps assist");
+                    combatEngine->removeStrategy("behind");
+                }
             }
 
             if (player->getClass() == CLASS_PRIEST && tab < 2)
@@ -604,6 +649,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         combatEngine->removeStrategy("flee");
         combatEngine->removeStrategy("threat");
         combatEngine->removeStrategy("follow");
+        combatEngine->removeStrategy("wander");
         combatEngine->removeStrategy("conserve mana");
         combatEngine->removeStrategy("cast time");
 
@@ -619,7 +665,14 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 
         if (player->getClass() == CLASS_DRUID && tab == 1)
         {
-            combatEngine->addStrategies("behind", "dps feral", "stealth", NULL);
+            if (player->HasSpell(16961) || player->HasSpell(16958))
+            {
+                combatEngine->addStrategies("tank feral", "close", NULL);
+            }
+            else
+            {
+                combatEngine->addStrategies("behind", "dps feral", "stealth", NULL);
+            }
         }
         
         if (player->getClass() == CLASS_ROGUE)
@@ -778,7 +831,14 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         {
             if (tab == 1)
             {
-                nonCombatEngine->addStrategies("tank feral", "tank assist", NULL);
+                if (player->HasSpell(16961) || player->HasSpell(16958))
+                {
+                    nonCombatEngine->addStrategies("tank feral", "tank assist", NULL);
+                }
+                else
+                {
+                    nonCombatEngine->addStrategies("dps feral", "dps assist", NULL);
+                }
             }
             else if (tab == 2)
             {
@@ -839,13 +899,26 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
 
     nonCombatEngine->addStrategies("wbuff", NULL);
     nonCombatEngine->addStrategy("avoid mobs");
+    nonCombatEngine->addStrategy("dungeon");
 
     if(sPlayerbotAIConfig.llmEnabled == 2)
         nonCombatEngine->addStrategy("ai chat");
 
     if (!player->InBattleGround())
     {
-        nonCombatEngine->addStrategies("racials", "nc", "food", "follow", "default", "quest", "loot", "gather", "duel", "emote", "buff", "mount", NULL);
+        PlayerbotAI* ai = player->GetPlayerbotAI();
+        Player* master = ai ? ai->GetMaster() : nullptr;
+
+        if (master && !master->GetPlayerbotAI())
+        {
+            const char* wanderFollow = sPlayerbotAIConfig.useWanderAsDefaultFollowStrategy ? "wander" : "follow";
+            nonCombatEngine->addStrategies("racials", "nc", "food", wanderFollow, "default", "quest", "loot", "gather", "duel", "emote", "buff", "mount", NULL);
+        }
+        else
+        {
+            const char* wanderFollow = sPlayerbotAIConfig.useWanderAsDefaultFollowStrategy ? "wander" : "follow";
+            nonCombatEngine->addStrategies("racials", "nc", "food", wanderFollow, "default", "quest", "loot", "gather", "duel", "emote", "buff", "mount", NULL);
+        }
     }
 
     if ((facade->HasRealPlayerMaster() && sPlayerbotAIConfig.jumpWithPlayer) ||
@@ -899,7 +972,6 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                 nonCombatEngine->addStrategy("travel");
                 nonCombatEngine->addStrategy("tfish");
                 nonCombatEngine->addStrategy("rpg");                
-                nonCombatEngine->removeStrategy("rpg craft");
             }
 
             if (sPlayerbotAIConfig.randomBotJoinBG)
@@ -914,39 +986,34 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
 
             nonCombatEngine->ChangeStrategy(sPlayerbotAIConfig.randomBotNonCombatStrategies);
         }
-        else 
+        else
         {
-            if (facade)
+            if (master)
             {
-                if (master)
+                if (master->GetPlayerbotAI() || sRandomPlayerbotMgr.IsFreeBot(player))
                 {
-                    if (master->GetPlayerbotAI() || sRandomPlayerbotMgr.IsFreeBot(player))
+                    nonCombatEngine->addStrategy("collision");
+                    nonCombatEngine->addStrategy("grind");
+                    nonCombatEngine->addStrategy("group");
+                    nonCombatEngine->addStrategy("guild");
+
+                    if (sPlayerbotAIConfig.autoDoQuests)
                     {
-                        nonCombatEngine->addStrategy("collision");
-                        nonCombatEngine->addStrategy("grind");
-                        nonCombatEngine->addStrategy("group");
-                        nonCombatEngine->addStrategy("guild");
-
-                        if (sPlayerbotAIConfig.autoDoQuests)
-                        {
-                            nonCombatEngine->addStrategy("travel");
-                            nonCombatEngine->addStrategy("tfish");
-                            nonCombatEngine->addStrategy("rpg");
-                            nonCombatEngine->removeStrategy("rpg craft");
-
-                        }
-
-                        if (!master || master->GetPlayerbotAI())
-                        {
-                            nonCombatEngine->addStrategy("maintenance");
-                        }
-
-                        nonCombatEngine->ChangeStrategy(sPlayerbotAIConfig.randomBotNonCombatStrategies);
+                        nonCombatEngine->addStrategy("travel");
+                        nonCombatEngine->addStrategy("tfish");
+                        nonCombatEngine->addStrategy("rpg");
                     }
-                    else
+
+                    if (master->GetPlayerbotAI())
                     {
-                        nonCombatEngine->ChangeStrategy(sPlayerbotAIConfig.nonCombatStrategies);
+                        nonCombatEngine->addStrategy("maintenance");
                     }
+
+                    nonCombatEngine->ChangeStrategy(sPlayerbotAIConfig.randomBotNonCombatStrategies);
+                }
+                else
+                {
+                    nonCombatEngine->ChangeStrategy(sPlayerbotAIConfig.nonCombatStrategies);
                 }
             }
         }
@@ -964,8 +1031,8 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         nonCombatEngine->removeStrategy("travel");
         nonCombatEngine->removeStrategy("tfish");
         nonCombatEngine->removeStrategy("rpg");
-        nonCombatEngine->removeStrategy("rpg craft");
         nonCombatEngine->removeStrategy("follow");
+        nonCombatEngine->removeStrategy("wander");
 
         nonCombatEngine->removeStrategy("grind");
 
@@ -1051,7 +1118,7 @@ Engine* AiFactory::createNonCombatEngine(Player* player, PlayerbotAI* const faca
 
 void AiFactory::AddDefaultDeadStrategies(Player* player, PlayerbotAI* const facade, Engine* deadEngine)
 {
-    deadEngine->addStrategies("dead", "stay", "default", "follow", "group", NULL);
+    deadEngine->addStrategies("dead", "stay", "default", "follow", "group", "dungeon", NULL);
     if (sRandomPlayerbotMgr.IsFreeBot(player) && !player->GetGroup())
     {
         deadEngine->removeStrategy("follow");
@@ -1172,7 +1239,14 @@ void AiFactory::AddDefaultDeadStrategies(Player* player, PlayerbotAI* const faca
         {
             if (tab == 1)
             {
-                deadEngine->addStrategy("tank feral");
+                if (player->HasSpell(16961) || player->HasSpell(16958))
+                {
+                    deadEngine->addStrategy("tank feral");
+                }
+                else
+                {
+                    deadEngine->addStrategy("dps feral");
+                }
             }
             else if (tab == 2)
             {
@@ -1242,7 +1316,7 @@ Engine* AiFactory::createDeadEngine(Player* player, PlayerbotAI* const facade, A
 
 void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const facade, ReactionEngine* reactionEngine)
 {
-    reactionEngine->addStrategies("react", "chat", "avoid aoe", "potions", NULL);
+    reactionEngine->addStrategies("react", "chat", "avoid aoe", "avoid specific creatures", "potions", "dungeon", NULL);
 
     const int tab = GetPlayerSpecTab(player);
     switch (player->getClass())
@@ -1359,7 +1433,14 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
         {
             if (tab == 1)
             {
-                reactionEngine->addStrategy("tank feral");
+                if (player->HasSpell(16961) || player->HasSpell(16958))
+                {
+                    reactionEngine->addStrategy("tank feral");
+                }
+                else
+                {
+                    reactionEngine->addStrategy("dps feral");
+                }
             }
             else if (tab == 2)
             {

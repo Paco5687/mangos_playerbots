@@ -4,6 +4,7 @@
 #include <playerbot/TravelNode.h>
 #include "ChooseTravelTargetAction.h"
 #include "playerbot/strategy/values/SharedValueContext.h"
+#include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/strategy/actions/RpgSubActions.h"
 #include "playerbot/LootObjectStack.h"
 #include "GameEvents/GameEventMgr.h"
@@ -13,12 +14,22 @@
 #include "MotionGenerators/PathFinder.h"
 #include "playerbot/PlayerbotLLMInterface.h"
 
+#ifdef MANGOSBOT_TWO
+#include "Vmap/VMapFactory.h"
+#else
+#include "vmap/VMapFactory.h"
+#endif
+
 #include "Grids/GridNotifiers.h"
 #include "Grids/GridNotifiersImpl.h"
 #include "Grids/CellImpl.h"
 
 #include <iomanip>
 #include "SayAction.h"
+#ifdef GenerateBotTests
+#include "playerbot/strategy/tests/TestRegistry.h"
+#endif
+#include "MotionGenerators/MoveMap.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -34,7 +45,10 @@ bool DebugAction::Execute(Event& event)
     }
 
     std::string text = event.getParam();
-    if (text == "avoid scan" && isMod)
+    
+    if (text == "help" || text.find("help ") == 0)
+        return HandleDebugHelp(event, requester, text, isMod);
+    else if (text == "avoid scan" && isMod)
         return HandleAvoidScan(event, requester, text);
     else if (text.find("avoid add") == 0 && isMod)
         return HandleAvoidAdd(event, requester, text);
@@ -76,6 +90,10 @@ bool DebugAction::Execute(Event& event)
         return HandleMotion(event, requester, text);
     else if (text.find("transport") == 0 && isMod)
         return HandleTransport(event, requester, text);
+    else if (text.find("pointontrans") == 0 && isMod)
+        return HandlePointOnTrans(event, requester, text);
+    else if (text.find("dotrans") == 0 && isMod)
+        return HandleDoTransport(event, requester, text);
     else if (text.find("ontrans") == 0 && isMod)
         return HandleOnTrans(event, requester, text);
     else if (text.find("offtrans") == 0 && isMod)
@@ -92,6 +110,10 @@ bool DebugAction::Execute(Event& event)
         return HandleLogoutTime(event, requester, text);
     else if (text.find("level") == 0)
         return HandleLevel(event, requester, text);
+    else if (text.find("quest") == 0)
+        return HandleQuest(event, requester, text);
+    else if (text.find("position") == 0)
+        return HandlePosition(event, requester, text);
     else if (text.find("npc") == 0)
         return HandleNPC(event, requester, text);
     else if (text.find("go ") == 0)
@@ -180,10 +202,819 @@ bool DebugAction::Execute(Event& event)
         return HandleDSound(event, requester, text);
     else if (text.find("sound") == 0 && isMod)
         return HandleSound(event, requester, text);
+    else if (text.find("stuck") == 0)
+        return HandleStuck(event, requester, text);
+    else if (text.find("combat") == 0)
+        return HandleCombat(event, requester, text);
+    else if (text.find("nodes") == 0)
+        return HandleNodes(event, requester, text);
+    else if (text.find("activity") == 0)
+        return HandleActivity(event, requester, text);
+    else if (text.find("transanal") == 0)
+        return HandleTransanal(event, requester, text);
+    else if (text.find("updownspace") == 0 && isMod)
+        return HandleUpdownspace(event, requester, text);
+    else if (text.find("patharound") == 0 && isMod)
+        return HandlePatharound(event, requester, text);
+    else if (text.find("heightforlos") == 0 && isMod)
+        return HandleHeightForLos(event, requester, text);
 
     // Fallback/default behavior
     std::string response = ai->HandleRemoteCommand(text);
     ai->TellPlayer(requester, response);
+    return true;
+}
+
+bool DebugAction::HandleDebugHelp(Event& event, Player* requester, const std::string& text, bool isMod)
+{
+    std::string cmd = text;
+    if (cmd.find("help ") == 0)
+        cmd = cmd.substr(5);
+    else
+        cmd = "";
+    
+    while (cmd.size() > 0 && cmd[0] == ' ')
+        cmd = cmd.substr(1);
+    
+    if (cmd.empty())
+    {
+        ai->TellPlayer(requester, "=== Debug Commands ===");
+        ai->TellPlayer(requester, "Usage: debug help <command>");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "General: position, quest, values, level, who, stats, spells");
+        ai->TellPlayer(requester, "Movement: route, path, distance, teleport, zone");
+        ai->TellPlayer(requester, "Info: target, movement, corpse, logouttime, taxi");
+        ai->TellPlayer(requester, "Interaction: npc, go, rpg, travel, loot, trade, mail");
+        ai->TellPlayer(requester, "Quest: quest list|complete|drop|add|travel");
+        ai->TellPlayer(requester, "Nodes: nodes");
+        
+        if (isMod)
+        {
+            ai->TellPlayer(requester, "Mod Only: llm, area, avoid, motion, transport, nc, gps");
+        }
+        
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Type 'debug help <command>' for detailed help.");
+        return true;
+    }
+    
+    std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
+    
+    if (cmd == "position" || cmd == "pos")
+    {
+        ai->TellPlayer(requester, "=== debug position ===");
+        ai->TellPlayer(requester, "Get position info and manipulate position-related data.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug position                    - Bot's GPS coordinates");
+        ai->TellPlayer(requester, "  debug position zone [loc]          - Zone info (bot or location)");
+        ai->TellPlayer(requester, "  debug position teleport [loc]     - Teleport to master or location");
+        ai->TellPlayer(requester, "  debug position distance [loc]    - Distance to master or location");
+        ai->TellPlayer(requester, "  debug position path <from>|<to>  - Full path with movement breakdown");
+        ai->TellPlayer(requester, "  debug position path <loc> full   - Show all path points");
+        ai->TellPlayer(requester, "  debug position route <from>|<to> - Route nodes with map/area");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Location formats:");
+        ai->TellPlayer(requester, "  x y                    - Coordinates (uses bot's map/z)");
+        ai->TellPlayer(requester, "  map x y                - 3 params");
+        ai->TellPlayer(requester, "  map x y z              - 4 params");
+        ai->TellPlayer(requester, "  LocationName           - Named location (case sensitive)");
+        ai->TellPlayer(requester, "  from|to                - Pipe separates start and end");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Examples:");
+        ai->TellPlayer(requester, "  debug position");
+        ai->TellPlayer(requester, "  debug position teleport Stormwind");
+        ai->TellPlayer(requester, "  debug position distance Orgrimmar");
+        ai->TellPlayer(requester, "  debug position path Orgrimmar|Stormwind");
+        ai->TellPlayer(requester, "  debug position route Orgrimmar|Stormwind full");
+    }
+    else if (cmd == "quest")
+    {
+        ai->TellPlayer(requester, "=== debug quest ===");
+        ai->TellPlayer(requester, "Manage and view quest information.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug quest                   - List all quests in bot's log");
+        ai->TellPlayer(requester, "  debug quest <id>              - Show quest details");
+        ai->TellPlayer(requester, "  debug quest complete <id>     - Complete a quest");
+        ai->TellPlayer(requester, "  debug quest drop <id>         - Abandon a quest");
+        ai->TellPlayer(requester, "  debug quest add <id>          - Add quest to log");
+        ai->TellPlayer(requester, "  debug quest travel <id>       - Show quest objectives");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Examples:");
+        ai->TellPlayer(requester, "  debug quest");
+        ai->TellPlayer(requester, "  debug quest 1");
+        ai->TellPlayer(requester, "  debug quest complete 1");
+    }
+    else if (cmd == "route")
+    {
+        ai->TellPlayer(requester, "=== debug position route ===");
+        ai->TellPlayer(requester, "Show travel nodes between two locations.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug position route <from>|<to>");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Output:");
+        ai->TellPlayer(requester, "  - List of travel nodes with names, zone, map");
+        ai->TellPlayer(requester, "  - Distance between each node");
+        ai->TellPlayer(requester, "  - Total route distance");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Examples:");
+        ai->TellPlayer(requester, "  debug position route Orgrimmar|Stormwind");
+        ai->TellPlayer(requester, "  debug position route ThunderBluff|Stormwind");
+    }
+    else if (cmd == "path")
+    {
+        ai->TellPlayer(requester, "=== debug position path ===");
+        ai->TellPlayer(requester, "Show full pathfinding route with movement breakdown.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug position path <loc>              - Summary only");
+        ai->TellPlayer(requester, "  debug position path <loc> full          - All points");
+        ai->TellPlayer(requester, "  debug position path <from>|<to>        - Between two locations");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Output:");
+        ai->TellPlayer(requester, "  - Total distance");
+        ai->TellPlayer(requester, "  - Walk/Fly/Transport/Teleport breakdown");
+        ai->TellPlayer(requester, "  - Map transitions");
+        ai->TellPlayer(requester, "  - Next waypoint coordinates");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Node Types: 0=prepath, 1=walk, 4=transport, 5=flight, 6=teleport");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Examples:");
+        ai->TellPlayer(requester, "  debug position path Stormwind");
+        ai->TellPlayer(requester, "  debug position path Orgrimmar|Stormwind full");
+    }
+    else if (cmd == "distance" || cmd == "dist")
+    {
+        ai->TellPlayer(requester, "=== debug position distance ===");
+        ai->TellPlayer(requester, "Calculate distance to a location.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug position distance [location]");
+        ai->TellPlayer(requester, "  Without location: distance to master");
+        ai->TellPlayer(requester, "  With location: distance to that point");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Examples:");
+        ai->TellPlayer(requester, "  debug position distance");
+        ai->TellPlayer(requester, "  debug position distance Orgrimmar");
+    }
+    else if (cmd == "teleport")
+    {
+        ai->TellPlayer(requester, "=== debug position teleport ===");
+        ai->TellPlayer(requester, "Teleport bot to a location.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug position teleport [location|coords]");
+        ai->TellPlayer(requester, "  Without params: teleport to master");
+        ai->TellPlayer(requester, "  With location: teleport to named location");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Examples:");
+        ai->TellPlayer(requester, "  debug position teleport");
+        ai->TellPlayer(requester, "  debug position teleport Stormwind");
+        ai->TellPlayer(requester, "  debug position teleport -8944 0.5");
+    }
+    else if (cmd == "zone")
+    {
+        ai->TellPlayer(requester, "=== debug position zone ===");
+        ai->TellPlayer(requester, "Get zone information for a location.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug position zone [location]");
+        ai->TellPlayer(requester, "  Without params: bot's current zone");
+        ai->TellPlayer(requester, "  With location: zone at that location");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Examples:");
+        ai->TellPlayer(requester, "  debug position zone");
+        ai->TellPlayer(requester, "  debug position zone Stormwind");
+    }
+    else if (cmd == "values")
+    {
+        ai->TellPlayer(requester, "=== debug values ===");
+        ai->TellPlayer(requester, "List and get bot AI values.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug values                    - List all values");
+        ai->TellPlayer(requester, "  debug values <name>            - Get value by name");
+        ai->TellPlayer(requester, "  debug setvalueuin32 <name> <v> - Set uint32 value");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Examples:");
+        ai->TellPlayer(requester, "  debug values");
+        ai->TellPlayer(requester, "  debug values last movement");
+    }
+    else if (cmd == "gps")
+    {
+        ai->TellPlayer(requester, "=== debug gps ===");
+        ai->TellPlayer(requester, "Get detailed position information (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug gps");
+        ai->TellPlayer(requester, "  Shows: X, Y, Z, Map, Area, Zone, Orientation");
+    }
+    else if (cmd == "level")
+    {
+        ai->TellPlayer(requester, "=== debug level ===");
+        ai->TellPlayer(requester, "Get or set bot level.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug level          - Show current level");
+        ai->TellPlayer(requester, "  debug level <n>     - Set level to n");
+    }
+    else if (cmd == "who")
+    {
+        ai->TellPlayer(requester, "=== debug who ===");
+        ai->TellPlayer(requester, "Show detailed bot information.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug who");
+        ai->TellPlayer(requester, "  Shows: Name, Level, Class, HP, Mana, Gold, Location");
+    }
+    else if (cmd == "stats")
+    {
+        ai->TellPlayer(requester, "=== debug stats ===");
+        ai->TellPlayer(requester, "Show bot statistics.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug stats");
+        ai->TellPlayer(requester, "  Shows: Gold, Bag slots, Durability, XP, Mana");
+    }
+    else if (cmd == "spells")
+    {
+        ai->TellPlayer(requester, "=== debug spells ===");
+        ai->TellPlayer(requester, "List bot's known spells.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug spells");
+    }
+    else if (cmd == "target")
+    {
+        ai->TellPlayer(requester, "=== debug target ===");
+        ai->TellPlayer(requester, "Show bot's current target.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug target");
+        ai->TellPlayer(requester, "  Shows: Target name, GUID, type");
+    }
+    else if (cmd == "movement")
+    {
+        ai->TellPlayer(requester, "=== debug movement ===");
+        ai->TellPlayer(requester, "Show last movement coordinates.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug movement");
+    }
+    else if (cmd == "mount")
+    {
+        ai->TellPlayer(requester, "=== debug mount ===");
+        ai->TellPlayer(requester, "Mount the bot.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug mount");
+    }
+    else if (cmd == "unmount")
+    {
+        ai->TellPlayer(requester, "=== debug unmount ===");
+        ai->TellPlayer(requester, "Dismount the bot.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug unmount");
+    }
+    else if (cmd == "who")
+    {
+        ai->TellPlayer(requester, "=== debug who ===");
+        ai->TellPlayer(requester, "Show detailed bot information.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug who");
+        ai->TellPlayer(requester, "  Shows: Name, Level, Class, HP, Mana, Gold, Location");
+    }
+    else if (cmd == "stats")
+    {
+        ai->TellPlayer(requester, "=== debug stats ===");
+        ai->TellPlayer(requester, "Show bot statistics.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug stats");
+        ai->TellPlayer(requester, "  Shows: Gold, Bag slots, Durability, XP, Mana");
+    }
+    else if (cmd == "spells")
+    {
+        ai->TellPlayer(requester, "=== debug spells ===");
+        ai->TellPlayer(requester, "List bot's known spells.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug spells");
+    }
+    else if (cmd == "gps" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug gps ===");
+        ai->TellPlayer(requester, "Get detailed position information (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug gps");
+        ai->TellPlayer(requester, "  Shows: X, Y, Z, Map, Area, Zone, Orientation");
+    }
+    else if (cmd == "llm" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug llm ===");
+        ai->TellPlayer(requester, "LLM interaction (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug llm <prompt>");
+    }
+    else if (cmd == "area" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug area ===");
+        ai->TellPlayer(requester, "Area debugging (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug area");
+    }
+    else if (cmd == "avoid" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug avoid ===");
+        ai->TellPlayer(requester, "Avoidance management (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug avoid scan");
+        ai->TellPlayer(requester, "  debug avoid add <spellId>");
+    }
+    else if (cmd == "trade")
+    {
+        ai->TellPlayer(requester, "=== debug trade ===");
+        ai->TellPlayer(requester, "Manage trade window with bot.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug trade       - Show trade status");
+        ai->TellPlayer(requester, "  debug trade <item> - Use item in trade");
+    }
+    else if (cmd == "mail")
+    {
+        ai->TellPlayer(requester, "=== debug mail ===");
+        ai->TellPlayer(requester, "Send mail to bot.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug mail <subject>");
+    }
+    else if (cmd == "taxi")
+    {
+        ai->TellPlayer(requester, "=== debug taxi ===");
+        ai->TellPlayer(requester, "Show taxi/fly routes.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug taxi");
+    }
+    else if (cmd == "rpg")
+    {
+        ai->TellPlayer(requester, "=== debug rpg ===");
+        ai->TellPlayer(requester, "Roleplay interaction.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug rpg <action>");
+    }
+    else if (cmd == "travel")
+    {
+        ai->TellPlayer(requester, "=== debug travel ===");
+        ai->TellPlayer(requester, "Travel to a location.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug travel <location>");
+    }
+    else if (cmd == "loot")
+    {
+        ai->TellPlayer(requester, "=== debug loot ===");
+        ai->TellPlayer(requester, "Loot information.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug loot");
+        ai->TellPlayer(requester, "  debug loot <target>");
+    }
+    else if (cmd == "npc")
+    {
+        ai->TellPlayer(requester, "=== debug npc ===");
+        ai->TellPlayer(requester, "Interact with NPC.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug npc <npc>");
+    }
+    else if (cmd == "go" || cmd == "goto")
+    {
+        ai->TellPlayer(requester, "=== debug go ===");
+        ai->TellPlayer(requester, "Go to location or object.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage:");
+        ai->TellPlayer(requester, "  debug go <coords>");
+        ai->TellPlayer(requester, "  debug go <gameobject>");
+    }
+    else if (cmd == "corpse")
+    {
+        ai->TellPlayer(requester, "=== debug corpse ===");
+        ai->TellPlayer(requester, "Show corpse location.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug corpse");
+    }
+    else if (cmd == "nc" || cmd == "nocombat")
+    {
+        ai->TellPlayer(requester, "=== debug nc ===");
+        ai->TellPlayer(requester, "Toggle non-combat mode.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug nc");
+    }
+    else if (cmd == "motion" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug motion ===");
+        ai->TellPlayer(requester, "Motion controller (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug motion <params>");
+    }
+    else if (cmd == "transport" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug transport ===");
+        ai->TellPlayer(requester, "Transport debugging (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug transport");
+    }
+    else if (cmd == "do")
+    {
+        ai->TellPlayer(requester, "=== debug do ===");
+        ai->TellPlayer(requester, "Execute bot action directly.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug do <action>");
+    }
+    else if (cmd == "item")
+    {
+        ai->TellPlayer(requester, "=== debug item ===");
+        ai->TellPlayer(requester, "Use or manage items.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug item <item>");
+    }
+    else if (cmd == "find")
+    {
+        ai->TellPlayer(requester, "=== debug find ===");
+        ai->TellPlayer(requester, "Find objects or NPCs.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug find <name>");
+    }
+    else if (cmd == "drops")
+    {
+        ai->TellPlayer(requester, "=== debug drops ===");
+        ai->TellPlayer(requester, "Show loot drops from creatures.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug drops <creature>");
+    }
+    else if (cmd == "price")
+    {
+        ai->TellPlayer(requester, "=== debug price ===");
+        ai->TellPlayer(requester, "Show item vendor price.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug price <item>");
+    }
+    else if (cmd == "logouttime")
+    {
+        ai->TellPlayer(requester, "=== debug logouttime ===");
+        ai->TellPlayer(requester, "Show logout timer.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug logouttime");
+    }
+    else if (cmd == "rpgtargets")
+    {
+        ai->TellPlayer(requester, "=== debug rpgtargets ===");
+        ai->TellPlayer(requester, "Show RPG interaction targets.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug rpgtargets");
+    }
+    else if (cmd == "poi")
+    {
+        ai->TellPlayer(requester, "=== debug poi ===");
+        ai->TellPlayer(requester, "Show point of interest.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug poi <poiId>");
+    }
+    else if (cmd == "setvalue" || cmd == "setvalueuin32")
+    {
+        ai->TellPlayer(requester, "=== debug setvalue ===");
+        ai->TellPlayer(requester, "Set bot AI value.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug setvalueuin32 <name> <value>");
+    }
+    // MOD ONLY - avoid
+    else if (cmd == "avoid scan" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug avoid scan ===");
+        ai->TellPlayer(requester, "Scan for avoidance targets (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug avoid scan");
+    }
+    else if (cmd == "avoid add" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug avoid add ===");
+        ai->TellPlayer(requester, "Add avoidance target (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug avoid add <spellId>");
+    }
+    // MOD ONLY - travel nodes
+    else if (cmd == "add node" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug add node ===");
+        ai->TellPlayer(requester, "Add travel node (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug add node");
+    }
+    else if (cmd == "rem node" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug rem node ===");
+        ai->TellPlayer(requester, "Remove travel node (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug rem node");
+    }
+    else if (cmd == "reset node" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug reset node ===");
+        ai->TellPlayer(requester, "Reset travel nodes (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug reset node");
+    }
+    else if (cmd == "reset path" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug reset path ===");
+        ai->TellPlayer(requester, "Reset travel path (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug reset path");
+    }
+    else if (cmd == "gen node" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug gen node ===");
+        ai->TellPlayer(requester, "Generate travel node (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug gen node");
+    }
+    else if (cmd == "gen path" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug gen path ===");
+        ai->TellPlayer(requester, "Generate travel path (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug gen path");
+    }
+    else if (cmd == "crop path" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug crop path ===");
+        ai->TellPlayer(requester, "Crop travel path (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug crop path");
+    }
+    else if (cmd == "save node" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug save node ===");
+        ai->TellPlayer(requester, "Save travel node (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug save node");
+    }
+    else if (cmd == "load node" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug load node ===");
+        ai->TellPlayer(requester, "Load travel node (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug load node");
+    }
+    else if (cmd == "show node" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug show node ===");
+        ai->TellPlayer(requester, "Show travel nodes (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug show node");
+    }
+    else if (cmd == "print travel" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug print travel ===");
+        ai->TellPlayer(requester, "Print travel info (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug print travel");
+    }
+    // MOD ONLY - transport
+    else if (cmd == "pointontrans" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug pointontrans ===");
+        ai->TellPlayer(requester, "Point on transport (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug pointontrans");
+    }
+    else if (cmd == "dotrans" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug dotrans ===");
+        ai->TellPlayer(requester, "Do transport action (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug dotrans");
+    }
+    else if (cmd == "ontrans" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug ontrans ===");
+        ai->TellPlayer(requester, "On transport (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug ontrans");
+    }
+    else if (cmd == "offtrans" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug offtrans ===");
+        ai->TellPlayer(requester, "Off transport (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug offtrans");
+    }
+    // MOD ONLY - map
+    else if (cmd == "pathable" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug pathable ===");
+        ai->TellPlayer(requester, "Check if location is pathable (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug pathable");
+    }
+    else if (cmd == "randomspot" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug randomspot ===");
+        ai->TellPlayer(requester, "Show random spot (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug randomspot");
+    }
+    else if (cmd == "printmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug printmap ===");
+        ai->TellPlayer(requester, "Print map info (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug printmap");
+    }
+    // MOD ONLY - spells
+    else if (cmd == "dspell" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug dspell ===");
+        ai->TellPlayer(requester, "Debug spell (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug dspell <spellId>");
+    }
+    else if (cmd == "vspell" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug vspell ===");
+        ai->TellPlayer(requester, "Validate spell (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug vspell <spellId>");
+    }
+    else if (cmd == "aspell" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug aspell ===");
+        ai->TellPlayer(requester, "Add spell (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug aspell <spellId>");
+    }
+    else if (cmd == "cspell" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug cspell ===");
+        ai->TellPlayer(requester, "Cast spell (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug cspell <spellId>");
+    }
+    else if (cmd == "fspell" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug fspell ===");
+        ai->TellPlayer(requester, "Fake spell (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug fspell <spellId>");
+    }
+    else if (cmd == "spell" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug spell ===");
+        ai->TellPlayer(requester, "Spell action (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug spell <spellId>");
+    }
+    // MOD ONLY - spell maps
+    else if (cmd == "tspellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug tspellmap ===");
+        ai->TellPlayer(requester, "Test spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug tspellmap");
+    }
+    else if (cmd == "uspellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug uspellmap ===");
+        ai->TellPlayer(requester, "Use spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug uspellmap");
+    }
+    else if (cmd == "dspellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug dspellmap ===");
+        ai->TellPlayer(requester, "Debug spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug dspellmap");
+    }
+    else if (cmd == "vspellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug vspellmap ===");
+        ai->TellPlayer(requester, "Validate spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug vspellmap");
+    }
+    else if (cmd == "ispellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug ispellmap ===");
+        ai->TellPlayer(requester, "Info spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug ispellmap");
+    }
+    else if (cmd == "cspellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug cspellmap ===");
+        ai->TellPlayer(requester, "Cast spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug cspellmap");
+    }
+    else if (cmd == "aspellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug aspellmap ===");
+        ai->TellPlayer(requester, "Add spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug aspellmap");
+    }
+    else if (cmd == "gspellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug gspellmap ===");
+        ai->TellPlayer(requester, "Get spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug gspellmap");
+    }
+    else if (cmd == "mspellmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug mspellmap ===");
+        ai->TellPlayer(requester, "Modify spell map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug mspellmap");
+    }
+    // MOD ONLY - sounds
+    else if (cmd == "soundmap" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug soundmap ===");
+        ai->TellPlayer(requester, "Sound map (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug soundmap");
+    }
+    else if (cmd == "sounds" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug sounds ===");
+        ai->TellPlayer(requester, "List sounds (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug sounds");
+    }
+    else if (cmd == "dsound" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug dsound ===");
+        ai->TellPlayer(requester, "Debug sound (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug dsound");
+    }
+    else if (cmd == "sound" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug sound ===");
+        ai->TellPlayer(requester, "Play sound (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug sound <soundId>");
+    }
+    // MOD ONLY - other
+    else if (cmd == "chatreplydo" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug chatreplydo ===");
+        ai->TellPlayer(requester, "Chat reply action (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug chatreplydo <text>");
+    }
+    else if (cmd == "monstertalk" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug monstertalk ===");
+        ai->TellPlayer(requester, "Monster talk (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug monstertalk <text>");
+    }
+    else if (cmd == "gy" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug gy ===");
+        ai->TellPlayer(requester, "Graveyard info (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug gy");
+    }
+    else if (cmd == "grid" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug grid ===");
+        ai->TellPlayer(requester, "Grid info (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug grid");
+    }
+    else if (cmd == "test" && isMod)
+    {
+        ai->TellPlayer(requester, "=== debug test ===");
+        ai->TellPlayer(requester, "Testing command (mod only).");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug test");
+    }
+    else if (cmd == "nodes")
+    {
+        ai->TellPlayer(requester, "=== debug nodes ===");
+        ai->TellPlayer(requester, "Debug travel node connection - why bots get stuck.");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Usage: debug nodes");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "This command checks:");
+        ai->TellPlayer(requester, "  - Nodes within 100y of bot");
+        ai->TellPlayer(requester, "  - If pathfinding works to each node");
+        ai->TellPlayer(requester, "  - What getNode() returns (the actual function used)");
+        ai->TellPlayer(requester, "  - Why pathfinding fails if it does");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Output:");
+        ai->TellPlayer(requester, "  - Step-by-step pathfinding results");
+        ai->TellPlayer(requester, "  - Path type and point count");
+        ai->TellPlayer(requester, "  - Distance reached vs total distance");
+        ai->TellPlayer(requester, "  - Suggested fixes");
+    }
+    else
+    {
+        ai->TellPlayer(requester, "Unknown command: " + cmd);
+        ai->TellPlayer(requester, "Type 'debug help' for list of commands.");
+    }
+    
     return true;
 }
 
@@ -511,7 +1342,44 @@ bool DebugAction::HandleTest(Event& event, Player* requester, const std::string&
         param = text.substr(5);
     }
 
-    ai->GetAiObjectContext()->ClearExpiredValues(param, 10);
+    if (param.empty())
+    {
+        ai->TellPlayer(requester, "=== debug test ===");
+        ai->TellPlayer(requester, "Usage: debug test <command>");
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "  locations          - List all test locations");
+        ai->TellPlayer(requester, "  locate <name>      - Test location resolution");
+        ai->TellPlayer(requester, "  [clear expired]  - Clear expired AI values");
+        return true;
+    }
+
+#ifdef GenerateBotTests 
+    if (param == "locations")
+    {
+        ai->TellPlayer(requester, "=== Test Locations ===");
+        auto tests = TestRegistry::GetAvailableTests();
+        ai->TellPlayer(requester, "Available tests: " + std::to_string(tests.size()));
+        return true;
+    }
+
+    if (param.find("locate ") == 0)
+    {
+        std::string locationName = param.substr(7);
+        GuidPosition loc;
+        if (TestRegistry::ParseLocation(locationName, loc))
+        {
+            std::ostringstream out;
+            out << locationName << " -> map=" << loc.mapid << " pos=(" << std::fixed << std::setprecision(2) << loc.coord_x << ", " << loc.coord_y << ", " << loc.coord_z << ")";
+            ai->TellPlayer(requester, out.str());
+        }
+        else
+        {
+            ai->TellPlayer(requester, "Failed to resolve location: " + locationName);
+        }
+        return true;
+    }
+#endif
+
     return true;
 }
 
@@ -734,21 +1602,12 @@ bool DebugAction::HandleTransport(Event& event, Player* requester, const std::st
     WorldPosition botPos(bot);
 
     //Closest transport last = below in chat.
-    std::sort(transports.begin(), transports.end(), [botPos](GenericTransport* i, GenericTransport* j){ return botPos.distance(i) > botPos.distance(j); });
+    std::sort(transports.begin(), transports.end(), [botPos](GenericTransport* i, GenericTransport* j) { return botPos.distance(i) > botPos.distance(j); });
 
     for (auto trans : transports)
     {
         GameObjectInfo const* data = sGOStorage.LookupEntry<GameObjectInfo>(trans->GetEntry());
         std::ostringstream out;
-
-        if (WorldPosition(bot).isOnTransport(trans))
-        {
-            out << "On transport ";
-        }
-        else
-        {
-            out << "Not on transport ";
-        }
 
         std::string transportName = trans->GetName();
         if (transportName.empty())
@@ -756,7 +1615,15 @@ bool DebugAction::HandleTransport(Event& event, Player* requester, const std::st
 
         out << transportName << " (" << trans->GetEntry() << ")";
 
-        out<< " dist:" << std::fixed << std::setprecision(2) << botPos.distance(trans) << " offset:" << (botPos -trans).print();
+        if (bot->GetTransport() == trans)
+            out << "[inside]";
+
+        if (WorldPosition(bot).isOnTransport(trans))
+        {
+            out << "[ontop]";
+        }
+
+        out << " dist:" << std::fixed << std::setprecision(2) << botPos.distance(trans) << " offset: " << (botPos - trans).print(2, true);
 
         ai->TellPlayer(requester, out);
     }
@@ -764,14 +1631,177 @@ bool DebugAction::HandleTransport(Event& event, Player* requester, const std::st
     return true;
 }
 
-bool DebugAction::HandleOnTrans(Event& event, Player* requester, const std::string& text)
+bool DebugAction::HandlePointOnTrans(Event& event, Player* requester, const std::string& text)
 {
-    if (bot->GetTransport())
+
+    uint32 radius = 20;
+    std::string param;
+
+    if (text.length() > std::string("pointontrans").size())
     {
+        param = text.substr(std::string("pointontrans").size() + 1);
+        radius = stoi(param);
+    }
+
+    //Get transport
+    std::vector<GenericTransport*> transports;
+
+    for (auto trans : WorldPosition(bot).getTransports())
+        transports.push_back(trans);
+
+    WorldPosition botPos(bot);
+
+    std::sort(transports.begin(), transports.end(), [botPos](GenericTransport* i, GenericTransport* j) { return botPos.distance(i) > botPos.distance(j); });
+
+    GenericTransport* transport = transports.back();
+
+    GameObjectInfo const* data = sGOStorage.LookupEntry<GameObjectInfo>(transport->GetEntry());
+    std::string transportName = transport->GetName();
+    if (transportName.empty())
+        transportName = data->name;
+
+    std::ostringstream out;
+    out << "found: " << transportName << " (" << transport->GetEntry() << ")";
+    ai->TellPlayer(requester, out);
+
+    //Get point on transport and path.
+    std::vector<WorldPosition> path;
+
+    WorldPosition pointOnTrans = WorldPosition(bot).RandomPointOnTrans(transport, radius, bot, path);
+
+    if (!pointOnTrans)
+    {
+        ai->TellPlayer(requester, "No points found.");
         return false;
     }
 
-    uint32 radius = 10;
+    WorldPosition transPos(transport);
+    transPos.SetTranpotHeightToFloor(transport->GetEntry());
+
+    out << "point at offset: " << (pointOnTrans - transPos).print(1, true);
+    out << " path size: " << path.size();
+
+    //Place WP at point.
+    GenericTransport* botTrans = bot->GetTransport();
+    bot->SetTransport(nullptr);
+
+    Creature* wpCreature = bot->SummonCreature(2334, pointOnTrans.getX(), pointOnTrans.getY(), pointOnTrans.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+    transport->AddPassenger(wpCreature, true);
+    wpCreature->NearTeleportTo(pointOnTrans.getX(), pointOnTrans.getY(), pointOnTrans.getZ(), wpCreature->GetOrientation());
+    ai->AddAura(wpCreature, 246);
+    bot->SetTransport(botTrans);
+
+    //Check if we have good path.
+    if (path.size())
+    {
+        WorldPosition pathEnd = path.back();
+        pathEnd.CalculatePassengerPosition(transport);
+
+        if (pathEnd.distance(pointOnTrans) < 1.0f)
+        {
+            out << " ON TRANS!!";
+            ai->AddAura(wpCreature, 1130);
+        }
+    }
+
+    ai->TellPlayer(requester, out);
+
+    return true;
+    /*
+    uint32 radius = 20;
+
+    for (float x = radius * -1.0f; x < radius; x += 1.0f)
+    {
+        for (float y = radius * -1.0f; y < radius; y += 1.0f)
+        {
+            if (x * x + y * y > radius * radius)
+                continue;
+
+            WorldPosition botPos(bot);
+            WorldPosition transPos(transport);
+
+            WorldPosition pos = transPos + WorldPosition(0, x, y);
+
+            transPos.SetTranpotHeightToFloor(transport->GetEntry());
+
+            bool onTrans = pos.SetOnTransport(transport, 0.5, -0.5);
+
+            if (!onTrans)
+                continue;
+
+            Player* pathBot = bot;
+            GenericTransport* botTrans = bot->GetTransport();
+
+            bot->SetTransport(nullptr);
+
+            Creature* wpCreature = bot->SummonCreature(2334, pos.getX(), pos.getY(), pos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            transport->AddPassenger(wpCreature, true);
+            wpCreature->NearTeleportTo(pos.getX(), pos.getY(), pos.getZ(), wpCreature->GetOrientation());
+            ai->AddAura(wpCreature, 246);
+
+            bot->SetTransport(transport);
+            std::unique_ptr<PathFinder> pathfinder = std::make_unique<PathFinder>(bot, true);
+            WorldPosition tStart = bot, tEnd = pos;
+            tStart.CalculatePassengerOffset(transport);
+            tEnd.CalculatePassengerOffset(transport);
+            pathfinder->calculate(tStart.getVector3(), tEnd.getVector3(), false);
+
+            if (!(pathfinder->getPathType() & PATHFIND_NORMAL))
+                continue;
+
+            std::vector<WorldPosition> path = pos.fromPointsArray(pathfinder->getPath());
+
+            if (path.size() < 2 || path.front().distance(path[1]) > 10.0f)
+                continue;
+
+            ai->TellPlayer(ai->GetMaster(), "Height diff:" + std::to_string(pos.getZ() - transPos.getZ()));
+
+            WorldPosition rp = path.back();
+            rp.CalculatePassengerPosition(transport);
+
+            if (rp.distance(pos) < 1.0f)
+                ai->AddAura(wpCreature, 1130);
+
+            bot->SetTransport(botTrans);
+        }
+    }
+
+    return true;
+    */
+}
+
+bool DebugAction::HandleDoTransport(Event& event, Player* requester, const std::string& text)
+{
+    std::string param;
+
+    if (text.length() > std::string("dotrans").size())
+        param = text.substr(std::string("dotrans").size() + 1);
+
+    WorldPosition botPos(bot), transPos(bot);
+
+    uint32 entry = 0;
+    float distance = FLT_MAX;
+
+    for (auto trans : botPos.getTransports())
+    {
+        float dist = botPos.distance(trans);
+
+        if (dist < distance)
+        {
+            distance = dist;
+            entry = trans->GetEntry();
+            transPos = trans;
+        }
+    }
+
+    MovementAction::UseTransport(ai, entry, transPos, requester, param.find("tele") != std::string::npos);
+
+    return true;
+}
+
+bool DebugAction::HandleOnTrans(Event& event, Player* requester, const std::string& text)
+{
+    uint32 radius = 20;
 
     if (text.length() > std::string("ontrans").size())
     {
@@ -779,12 +1809,17 @@ bool DebugAction::HandleOnTrans(Event& event, Player* requester, const std::stri
     }
 
     WorldPosition botPos(bot);
+
+    float distance = FLT_MAX;
+
     GenericTransport* transport = nullptr;
     for (auto trans : botPos.getTransports())
     {
-        if (!transport || botPos.distance(trans) < botPos.distance(transport))
+        float dist = botPos.distance(trans);
+        if (dist < distance)
         {
             transport = trans;
+            distance = dist;
         }
     }
 
@@ -793,141 +1828,111 @@ bool DebugAction::HandleOnTrans(Event& event, Player* requester, const std::stri
         return false;
     }
 
-    GenericTransport* trans = transport;
+    GenericTransport* botTrans = bot->GetTransport();
 
-    WorldPosition pos(trans);
+    std::vector<WorldPosition> path;
 
-    pos.setZ(botPos.getZ() + 3.0f);
+    WorldPosition transPos = botPos.RandomPointOnTrans(transport, 20.0f, bot, path);
 
-    //if(trans->GetGoType() == GAMEOBJECT_TYPE_MO_TRANSPORT)
-    //    pos += WorldPosition(0, cos(pos.getAngleTo(botPos)) * 3.0f, sin(pos.getAngleTo(botPos)) * 3.0f);
+    if (!transPos)
+        return false;
 
-    bot->SetTransport(trans);
-    std::vector<WorldPosition> path = pos.getPathFrom(botPos, bot); //Use full pathstep to get proper paths on to transports.
+    bot->SetTransport(botTrans);
 
     if (path.empty())
     {
-        ai->TellPlayer(requester, "No path.");
-        bot->SetTransport(nullptr);
-        return false;
+        ai->TellPlayer(requester, "No point, trying to get near transport first.");
+        path = WorldPosition(transport).getPathStepFrom(botPos, bot);
+
+        if (path.empty())
+            return false;
+    }
+    else
+    {
+        ai->TellPlayer(requester, "Found point on transport, trying to walk there.");
+        transport->AddPassenger(bot, true);
+
+        ai->StopMoving();
+
+        if (!bot->GetMotionMaster()->empty())
+            if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
+                movgen->Interrupt(*bot);
+
+        bot->SendHeartBeat();
+
+        if (!bot->GetMotionMaster()->empty())
+            if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
+                movgen->Reset(*bot);
     }
 
-    WorldPosition entryPos = path.back();
-
-    if (!entryPos.isOnTransport(trans))
+    if (ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
     {
-        for (auto p : path)
+        for (auto& p : path)
         {
-            bool onTrans = pos.isOnTransport(trans);
-
-            if (onTrans) //Summon creature needs to be Summoned on offset coordinates.
-            {
-                p.CalculatePassengerOffset(trans);
-                bot->SetTransport(trans);
-            }
-            else //Generate wp off transport so it doesn't spawn on transport.
-            {
-                bot->SetTransport(nullptr);
-            }
-
             Creature* wpCreature = bot->SummonCreature(2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+
+            transport->AddPassenger(wpCreature, true);
+
+            wpCreature->NearTeleportTo(p.getX(), p.getY(), p.getZ(), wpCreature->GetOrientation());
+
             ai->AddAura(wpCreature, 246);
 
-            if (p.isOnTransport(transport))
-            {
+            if (p == path.back())
                 ai->AddAura(wpCreature, 1130);
-            }
-        }
-
-        ai->TellPlayer(requester, "No path on boat.");
-        bot->SetTransport(nullptr);
-        return false;
-    }
-
-    for (auto p : path)
-    {
-        bool onTrans = pos.isOnTransport(trans);
-
-        if (onTrans) //Summon creature needs to be Summoned on offset coordinates.
-        {
-            p.CalculatePassengerOffset(trans);
-            bot->SetTransport(trans);
-        }
-        else //Generate wp off transport so it doesn't spawn on transport.
-        {
-            bot->SetTransport(nullptr);
-        }
-
-        Creature* wpCreature = bot->SummonCreature(2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
-        ai->AddAura(wpCreature, 246);
-
-        if (p.isOnTransport(transport))
-        {
-            ai->AddAura(wpCreature, 1130);
         }
     }
 
-    transport->AddPassenger(bot);
+    bot->GetMotionMaster()->Clear();
 
-    ai->StopMoving();
-    bot->GetMotionMaster()->MovePoint(entryPos.getMapId(), entryPos.getX(), entryPos.getY(), botPos.getZ(), FORCED_MOVEMENT_RUN);
+    std::vector<G3D::Vector3> pointPath = transPos.toPointsArray(path);
+#ifndef MANGOSBOT_TWO
+    bot->GetMotionMaster()->MovePath(pointPath, FORCED_MOVEMENT_RUN, false, false);
+#else
+    bot->GetMotionMaster()->MovePath(pointPath, FORCED_MOVEMENT_RUN, false);
+#endif  
 
     return true;
 }
 
 bool DebugAction::HandleOffTrans(Event& event, Player* requester, const std::string& text)
 {
-    uint32 radius = 10;
-
-    if (text.length() > std::string("offtrans").size())
-    {
-        radius = stoi(text.substr(std::string("offtrans").size() + 1));
-    }
-
     if (!bot->GetTransport())
     {
+        ai->TellPlayer(requester, "Bot not on transport.");
         return false;
     }
 
-    WorldPosition botPos(bot);
     GenericTransport* transport = bot->GetTransport();
 
-    if (!transport)
-    {
-        return false;
-    }
+    WorldPosition exitPos(requester);
 
-    WorldPosition destPos = botPos + WorldPosition(0,cos(bot->GetOrientation()) * radius, sin(bot->GetOrientation()) * radius);
+    transport->RemovePassenger(bot);
 
-    std::vector<WorldPosition> path = destPos.getPathFrom(botPos, nullptr);
+    bot->NearTeleportTo(bot->m_movementInfo.pos.x, bot->m_movementInfo.pos.y, bot->m_movementInfo.pos.z, bot->m_movementInfo.pos.o);
+
+    std::vector<WorldPosition> path = WorldPosition(bot).getPathStepFrom(exitPos, bot, false);
 
     if (path.empty())
     {
-        ai->TellPlayer(requester, "No path.");
+        ai->TellPlayer(requester, "No path to exitPos.");
         return false;
     }
 
-    WorldPosition exitPos = path.back();
-
-    if (exitPos.isOnTransport(transport))
+    if (exitPos.sqDistance(path.back()) > 5.0f)
     {
-        ai->TellPlayer(requester, "Path still on boat.");
+        ai->TellPlayer(requester, "Path doesn't get to exit pos.");
         return false;
     }
-    
-    for (auto& p : path)
-    {
-        p.CalculatePassengerOffset(bot->GetTransport());
 
-        Creature* wpCreature = bot->SummonCreature(2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
-        ai->AddAura(wpCreature, 246);
+    bot->GetMotionMaster()->Clear();
 
-        if (p.isOnTransport(transport))
-            ai->AddAura(wpCreature, 1130);
-    }
+    std::vector<G3D::Vector3> pointPath = exitPos.toPointsArray(path);
 
-    ai->StopMoving();
-    bot->GetMotionMaster()->MovePoint(exitPos.getMapId(), exitPos.getX(), exitPos.getY(), exitPos.getZ(),FORCED_MOVEMENT_RUN);
+#ifndef MANGOSBOT_TWO
+    bot->GetMotionMaster()->MovePath(pointPath, FORCED_MOVEMENT_RUN, false, false);
+#else
+    bot->GetMotionMaster()->MovePath(pointPath, FORCED_MOVEMENT_RUN, false);
+#endif  
 
     return true;
 }
@@ -960,7 +1965,7 @@ bool DebugAction::HandlePathable(Event& event, Player* requester, const std::str
 
             if (!pos.isOnTransport(trans)) //When trying to calculate a position off the transport, act like the bot is off the transport.
                 pathBot = nullptr;
-            else 
+            else
                 bot->SetTransport(trans);
 
             std::vector<WorldPosition> path = pos.getPathFrom(botPos, pathBot); //Use full pathstep to get proper paths on to transports.
@@ -1108,6 +2113,1119 @@ bool DebugAction::HandleLevel(Event& event, Player* requester, const std::string
 
     bot->Whisper(out.str().c_str(), LANG_UNIVERSAL, event.getOwner()->GetObjectGuid());
 
+    return true;
+}
+
+bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string& text)
+{
+    std::string param = text.substr(5); // skip "quest"
+    while (param.size() > 0 && param[0] == ' ')
+        param = param.substr(1);
+
+    std::string subcmd;
+    std::string questParam;
+
+    // Parse subcommand
+    size_t spacePos = param.find(' ');
+    if (spacePos != std::string::npos)
+    {
+        subcmd = param.substr(0, spacePos);
+        questParam = param.substr(spacePos + 1);
+        while (questParam.size() > 0 && questParam[0] == ' ')
+            questParam = questParam.substr(1);
+    }
+    else
+    {
+        subcmd = param;
+    }
+
+    // Handle 'list' subcommand
+    if (subcmd == "list")
+    {
+        std::ostringstream out;
+        out << "=== Quest Log ===";
+        int count = 0;
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 questId = bot->GetQuestSlotQuestId(slot);
+            if (!questId)
+                continue;
+
+            Quest const* pQuest = sObjectMgr.GetQuestTemplate(questId);
+            std::string name = pQuest ? pQuest->GetTitle() : "Unknown";
+            QuestStatus status = bot->GetQuestStatus(questId);
+            std::string statusStr = (status == QUEST_STATUS_COMPLETE) ? "[COMPLETE]" : "[INCOMPLETE]";
+            
+            out << "\n" << questId << ": " << statusStr << " " << name;
+            count++;
+        }
+        if (count == 0)
+            out << "\nNo quests in log";
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    // Parse quest ID - try both subcmd and questParam
+    uint32 questId = 0;
+
+    // First try questParam (if provided with subcommand like "complete 123")
+    if (!questParam.empty())
+    {
+        try
+        {
+            questId = std::stoul(questParam);
+        }
+        catch (...)
+        {
+            if (questParam.find("|Hquest:") != std::string::npos)
+            {
+                size_t start = questParam.find(":") + 1;
+                size_t end = questParam.find(":", start);
+                if (end != std::string::npos)
+                {
+                    try
+                    {
+                        questId = std::stoul(questParam.substr(start, end - start));
+                    }
+                    catch (...) {}
+                }
+            }
+        }
+    }
+
+    // If no questId yet, try subcmd directly (for "quest 745" syntax)
+    if (!questId && !subcmd.empty())
+    {
+        try
+        {
+            questId = std::stoul(subcmd);
+        }
+        catch (...)
+        {
+            if (subcmd.find("|Hquest:") != std::string::npos)
+            {
+                size_t start = subcmd.find(":") + 1;
+                size_t end = subcmd.find(":", start);
+                if (end != std::string::npos)
+                {
+                    try
+                    {
+                        questId = std::stoul(subcmd.substr(start, end - start));
+                    }
+                    catch (...) {}
+                }
+            }
+        }
+    }
+
+    // Handle 'complete' subcommand
+    if (subcmd == "complete")
+    {
+        if (!questId)
+        {
+            ai->TellPlayer(requester, "Usage: quest complete <questId>");
+            return true;
+        }
+
+        // Find the quest in bot's quest log
+        bool found = false;
+        bool completed = false;
+
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 logQuestId = bot->GetQuestSlotQuestId(slot);
+            if (!logQuestId)
+                continue;
+
+            if (logQuestId != questId)
+                continue;
+
+            found = true;
+
+            if (bot->GetQuestStatus(questId) == QUEST_STATUS_COMPLETE)
+            {
+                completed = true;
+                break;
+            }
+
+            Quest const* pQuest = sObjectMgr.GetQuestTemplate(questId);
+            if (!pQuest)
+                break;
+
+            // Add required items
+            for (uint8 x = 0; x < QUEST_ITEM_OBJECTIVES_COUNT; ++x)
+            {
+                uint32 id = pQuest->ReqItemId[x];
+                uint32 count = pQuest->ReqItemCount[x];
+                if (!id || !count)
+                    continue;
+
+                uint32 curItemCount = bot->GetItemCount(id, true);
+                if (curItemCount >= count)
+                    continue;
+
+                ItemPosCountVec dest;
+                uint8 msg = bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, id, count - curItemCount);
+                if (msg == EQUIP_ERR_OK)
+                {
+                    Item* item = bot->StoreNewItem(dest, id, true);
+                    bot->SendNewItem(item, count - curItemCount, true, false);
+                }
+            }
+
+            // Complete kill objectives
+            for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+            {
+                int32 creature = pQuest->ReqCreatureOrGOId[i];
+                uint32 creaturecount = pQuest->ReqCreatureOrGOCount[i];
+
+                if (uint32 spell_id = pQuest->ReqSpell[i])
+                {
+                    for (uint16 z = 0; z < creaturecount; ++z)
+                        bot->CastedCreatureOrGO(creature, ObjectGuid((creature > 0 ? HIGHGUID_UNIT : HIGHGUID_GAMEOBJECT), uint32(std::abs(creature)), 1u), spell_id);
+                }
+                else if (creature > 0)
+                {
+                    if (CreatureInfo const* cInfo = ObjectMgr::GetCreatureTemplate(creature))
+                        for (uint16 z = 0; z < creaturecount; ++z)
+                            bot->KilledMonster(cInfo, nullptr);
+                }
+                else if (creature < 0)
+                {
+                    for (uint16 z = 0; z < creaturecount; ++z)
+                        bot->CastedCreatureOrGO(-creature, ObjectGuid(), 0);
+                }
+            }
+
+            // Complete reputation
+            if (uint32 repFaction = pQuest->GetRepObjectiveFaction())
+            {
+                uint32 repValue = pQuest->GetRepObjectiveValue();
+                uint32 curRep = bot->GetReputationMgr().GetReputation(repFaction);
+                if (curRep < repValue)
+                {
+#ifndef MANGOSBOT_ONE
+                    if (FactionEntry const* factionEntry = sFactionStore.LookupEntry(repFaction))
+#else
+                    if (FactionEntry const* factionEntry = sFactionStore.LookupEntry<FactionEntry>(repFaction))
+#endif
+                        bot->GetReputationMgr().SetReputation(factionEntry, repValue);
+                }
+            }
+
+            // Complete money requirement
+            int32 ReqOrRewMoney = pQuest->GetRewOrReqMoney();
+            if (ReqOrRewMoney < 0)
+                bot->ModifyMoney(-ReqOrRewMoney);
+
+            bot->CompleteQuest(questId);
+            completed = true;
+            break;
+        }
+
+        if (completed)
+        {
+            std::ostringstream out;
+            out << "Quest " << questId << " completed!";
+            ai->TellPlayer(requester, out.str());
+        }
+        else if (found)
+        {
+            std::ostringstream out;
+            out << "Quest " << questId << " already completed.";
+            ai->TellPlayer(requester, out.str());
+        }
+        else
+        {
+            std::ostringstream out;
+            out << "Quest " << questId << " not found in quest log.";
+            ai->TellPlayer(requester, out.str());
+        }
+        return true;
+    }
+
+    // Handle 'drop' subcommand (abandon quest)
+    if (subcmd == "drop")
+    {
+        if (!questId)
+        {
+            ai->TellPlayer(requester, "Usage: quest drop <questId>");
+            return true;
+        }
+
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 logQuestId = bot->GetQuestSlotQuestId(slot);
+            if (!logQuestId || logQuestId != questId)
+                continue;
+
+            bot->SetQuestSlot(slot, 0);
+            bot->SetQuestSlotState(slot, QUEST_STATE_NONE);
+            
+            std::ostringstream out;
+            out << "Quest " << questId << " dropped.";
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+
+        std::ostringstream out;
+        out << "Quest " << questId << " not found in quest log.";
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    // Handle 'add' subcommand (add quest to log)
+    if (subcmd == "add")
+    {
+        if (!questId)
+        {
+            ai->TellPlayer(requester, "Usage: quest add <questId>");
+            return true;
+        }
+
+        Quest const* pQuest = sObjectMgr.GetQuestTemplate(questId);
+        if (!pQuest)
+        {
+            std::ostringstream out;
+            out << "Quest " << questId << " not found in database.";
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+
+        // Find empty slot
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            if (bot->GetQuestSlotQuestId(slot))
+                continue;
+
+            bot->SetQuestSlot(slot, questId);
+            bot->SetQuestSlotState(slot, QUEST_STATE_NONE);
+            
+            std::ostringstream out;
+            out << "Quest " << questId << " (" << pQuest->GetTitle() << ") added.";
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+
+        ai->TellPlayer(requester, "Quest log is full");
+        return true;
+    }
+
+    // Handle 'travel' subcommand (show travel info for quest)
+    if (subcmd == "travel")
+    {
+        if (!questId)
+        {
+            ai->TellPlayer(requester, "Usage: quest travel <questId>");
+            return true;
+        }
+
+        Quest const* pQuest = sObjectMgr.GetQuestTemplate(questId);
+        if (!pQuest)
+        {
+            std::ostringstream out;
+            out << "Quest " << questId << " not found in database.";
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+
+        std::ostringstream out;
+        out << "=== Quest: " << questId << " ===";
+        out << "\n" << pQuest->GetTitle();
+        
+        // Show objectives
+        out << "\n--- Objectives ---";
+        for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+        {
+            int32 creature = pQuest->ReqCreatureOrGOId[i];
+            uint32 count = pQuest->ReqCreatureOrGOCount[i];
+            if (!creature || !count)
+                continue;
+
+            std::string targetType = (creature > 0) ? "Kill" : "Collect";
+            out << "\n" << targetType << " " << abs(creature) << " x" << count;
+        }
+        for (uint8 x = 0; x < QUEST_ITEM_OBJECTIVES_COUNT; ++x)
+        {
+            uint32 item = pQuest->ReqItemId[x];
+            uint32 count = pQuest->ReqItemCount[x];
+            if (!item || !count)
+                continue;
+
+            out << "\nCollect item " << item << " x" << count;
+        }
+
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    // Handle 'info' or just quest ID - show info about quest
+    if (!subcmd.empty() && questId)
+    {
+        Quest const* pQuest = sObjectMgr.GetQuestTemplate(questId);
+        if (!pQuest)
+        {
+            std::ostringstream out;
+            out << "Quest " << questId << " not found in database.";
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+
+        // Check if in quest log
+        bool inLog = false;
+        QuestStatus status = QUEST_STATUS_NONE;
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            if (bot->GetQuestSlotQuestId(slot) == questId)
+            {
+                inLog = true;
+                status = bot->GetQuestStatus(questId);
+                break;
+            }
+        }
+
+        std::ostringstream out;
+        out << "=== Quest: " << questId << " ===";
+        out << "\n" << pQuest->GetTitle();
+        out << "\nLevel: " << pQuest->GetQuestLevel();
+        out << "\nStatus: ";
+        if (!inLog)
+            out << "NOT IN LOG";
+        else if (status == QUEST_STATUS_COMPLETE)
+            out << "COMPLETE";
+        else
+            out << "IN PROGRESS";
+
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    // No valid subcommand - show usage
+    ai->TellPlayer(requester, "Usage: quest <complete|drop|add|list|travel> [questId]");
+    return true;
+}
+
+PositionTarget DebugAction::ParseLocation(const std::string& param, Player* bot)
+{
+    PositionTarget result;
+    
+    if (param.empty())
+        return result;
+
+    std::istringstream iss(param);
+    std::vector<float> numbers;
+    float num;
+    while (iss >> num)
+    {
+        numbers.push_back(num);
+    }
+
+    bool isAllNumbers = numbers.size() > 0 && param.find_first_not_of("0123456789.-+ ") == std::string::npos;
+    
+    if (isAllNumbers && numbers.size() <= 4)
+    {
+        result.valid = true;
+        if (numbers.size() == 2)
+        {
+            result.mapId = bot->GetMapId();
+            result.x = numbers[0];
+            result.y = numbers[1];
+            result.z = bot->GetPositionZ();
+        }
+        else if (numbers.size() == 3)
+        {
+            result.mapId = (uint32)numbers[0];
+            result.x = numbers[1];
+            result.y = numbers[2];
+            result.z = bot->GetPositionZ();
+        }
+        else if (numbers.size() == 4)
+        {
+            result.mapId = (uint32)numbers[0];
+            result.x = numbers[1];
+            result.y = numbers[2];
+            result.z = numbers[3];
+        }
+        return result;
+    }
+
+    GameTele const* tele = sObjectMgr.GetGameTele(param);
+    if (tele)
+    {
+        result.valid = true;
+        result.mapId = tele->mapId;
+        result.x = tele->position_x;
+        result.y = tele->position_y;
+        result.z = tele->position_z;
+        result.name = param;
+        return result;
+    }
+
+    return result;
+}
+
+bool DebugAction::HandlePosition(Event& event, Player* requester, const std::string& text)
+{
+    std::string param = text.substr(8); // skip "position"
+    while (param.size() > 0 && param[0] == ' ')
+        param = param.substr(1);
+
+    // Handle subcommands
+    if (param.substr(0, 4) == "zone")
+    {
+        std::string zoneParam = param.size() > 4 ? param.substr(4) : "";
+        while (zoneParam.size() > 0 && zoneParam[0] == ' ')
+            zoneParam = zoneParam.substr(1);
+
+        uint32 mapId = bot->GetMapId();
+        float x = bot->GetPositionX();
+        float y = bot->GetPositionY();
+
+        if (!zoneParam.empty())
+        {
+            PositionTarget target = ParseLocation(zoneParam, bot);
+            if (target.valid)
+            {
+                mapId = target.mapId;
+                x = target.x;
+                y = target.y;
+            }
+            else
+            {
+                ai->TellPlayer(requester, "Usage: position zone [x y | map x y | location]");
+                return true;
+            }
+        }
+
+        uint32 areaId = sTerrainMgr.GetAreaId(mapId, x, y, bot->GetPositionZ());
+        const AreaTableEntry* area = GetAreaEntryByAreaID(areaId);
+        std::ostringstream out;
+        out << "Zone: " << areaId;
+        if (area)
+        {
+            out << " (" << area->area_name[0] << ")";
+            if (area->zone)
+            {
+                const AreaTableEntry* zone = GetAreaEntryByAreaID(area->zone);
+                if (zone)
+                    out << " Zone: " << zone->area_name[0];
+            }
+        }
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    // Check travel nodes near bot or location
+    if (param.substr(0, 5) == "nodes")
+    {
+        std::string nodeParam = param.size() > 5 ? param.substr(5) : "";
+        while (nodeParam.size() > 0 && nodeParam[0] == ' ')
+            nodeParam = nodeParam.substr(1);
+
+        WorldPosition pos(bot);
+        if (!nodeParam.empty())
+        {
+            PositionTarget target = ParseLocation(nodeParam, bot);
+            if (target.valid)
+            {
+                pos = WorldPosition(target.mapId, target.x, target.y, target.z, 0);
+            }
+        }
+
+        std::vector<TravelNode*> nodes = sTravelNodeMap.getNodes(pos);
+        std::ostringstream out;
+        out << "Travel nodes near " << pos.getAreaName() << " (" << uint32(pos.getX()) << "," << uint32(pos.getY()) << "," << uint32(pos.getZ()) << "): " << nodes.size();
+        
+        if (nodes.size() > 0)
+        {
+            out << " - closest: " << uint32(nodes[0]->getDistance(pos)) << "y";
+            if (nodes.size() > 1)
+                out << ", 2nd: " << uint32(nodes[1]->getDistance(pos)) << "y";
+        }
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    if (param.substr(0, 8) == "teleport")
+    {
+        std::string teleParam = param.substr(8);
+        while (teleParam.size() > 0 && teleParam[0] == ' ')
+            teleParam = teleParam.substr(1);
+
+        if (teleParam.empty())
+        {
+            Player* master = ai->GetMaster();
+            if (master)
+            {
+                bot->TeleportTo(master->GetMapId(), master->GetPositionX(), master->GetPositionY(), master->GetPositionZ(), master->GetOrientation());
+                ai->TellPlayer(requester, "Teleported to master");
+            }
+            else
+            {
+                ai->TellPlayer(requester, "No master found");
+            }
+            return true;
+        }
+
+        PositionTarget target = ParseLocation(teleParam, bot);
+        if (target.valid)
+        {
+            bot->TeleportTo(target.mapId, target.x, target.y, target.z, bot->GetOrientation());
+            std::ostringstream out;
+            if (!target.name.empty())
+                out << "Teleported to " << target.name;
+            else if (target.mapId == bot->GetMapId())
+                out << "Teleported to " << target.x << ", " << target.y << " on map " << target.mapId;
+            else
+                out << "Teleported to map " << target.mapId << " at " << target.x << ", " << target.y << ", " << target.z;
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+
+        ai->TellPlayer(requester, "Usage: position teleport [x y | map x y | map x y z | location]");
+        return true;
+    }
+
+    if (param.substr(0, 8) == "distance" || param.substr(0, 4) == "dist")
+    {
+        std::string distParam = param.size() > 8 ? param.substr(8) : (param.size() > 4 ? param.substr(4) : "");
+        while (distParam.size() > 0 && distParam[0] == ' ')
+            distParam = distParam.substr(1);
+
+        if (distParam.empty())
+        {
+            Player* master = ai->GetMaster();
+            if (master)
+            {
+                float dist = bot->GetDistance(master);
+                std::ostringstream out;
+                out << "Distance to master: " << dist << " yards";
+                ai->TellPlayer(requester, out.str());
+            }
+            else
+            {
+                ai->TellPlayer(requester, "No master found");
+            }
+            return true;
+        }
+
+        PositionTarget target = ParseLocation(distParam, bot);
+        if (target.valid)
+        {
+            float dx = bot->GetPositionX() - target.x;
+            float dy = bot->GetPositionY() - target.y;
+            float dz = bot->GetPositionZ() - target.z;
+            float dist = sqrt(dx*dx + dy*dy + dz*dz);
+            std::ostringstream out;
+            out << "Distance to " << (target.name.empty() ? std::string("position") : target.name) << ": " << dist << " yards";
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+
+        ai->TellPlayer(requester, "Usage: position distance [x y | map x y | map x y z | location]");
+        return true;
+    }
+
+    if (param.substr(0, 4) == "path")
+    {
+        std::string pathParam = param.size() > 4 ? param.substr(4) : "";
+        while (pathParam.size() > 0 && pathParam[0] == ' ')
+            pathParam = pathParam.substr(1);
+
+        if (pathParam.empty())
+        {
+            LastMovement& moveData = *ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement");
+            std::ostringstream out;
+            out << "Last movement: ";
+            WorldPosition().printWKT(moveData.lastPath.getPointPath(), out, 1);
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+
+        std::string targetParam;
+        WorldPosition startPos(bot);
+        
+        size_t pipePos = pathParam.find('|');
+        if (pipePos == std::string::npos)
+            pipePos = pathParam.find("->");
+        
+        bool showFull = false;
+        if (pipePos != std::string::npos)
+        {
+            std::string startStr = pathParam.substr(0, pipePos);
+            targetParam = pathParam.substr(pipePos + 1);
+            while (targetParam.size() > 0 && targetParam[0] == ' ')
+                targetParam = targetParam.substr(1);
+            
+            if (targetParam.find("full") != std::string::npos)
+            {
+                showFull = true;
+                size_t fullPos = targetParam.find("full");
+                targetParam = targetParam.substr(0, fullPos);
+                while (targetParam.size() > 0 && targetParam[targetParam.size() - 1] == ' ')
+                    targetParam = targetParam.substr(0, targetParam.size() - 1);
+            }
+            
+            PositionTarget startTarget = ParseLocation(startStr, bot);
+            if (startTarget.valid)
+            {
+                startPos = WorldPosition(startTarget.mapId, startTarget.x, startTarget.y, startTarget.z);
+            }
+            else
+            {
+                ai->TellPlayer(requester, "Usage: position path <from>|<to>");
+                return true;
+            }
+        }
+        else
+        {
+            targetParam = pathParam;
+        }
+
+        PositionTarget target = ParseLocation(targetParam, bot);
+        if (target.valid)
+        {
+            WorldPosition endPos(target.mapId, target.x, target.y, target.z);
+            TravelPath fullPath = sTravelNodeMap.getFullPath(startPos, endPos, bot);
+            
+            if (fullPath.empty())
+            {
+                ai->TellPlayer(requester, "No path found");
+                return true;
+            }
+
+            float totalDist = 0.0f;
+            float walkDist = 0.0f, flightDist = 0.0f, transportDist = 0.0f, teleportCount = 0;
+            uint32 prevMapId = startPos.getMapId();
+            std::set<uint32> maps;
+            maps.insert(prevMapId);
+            WorldPosition prevPos = startPos;
+            bool debugMove = ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT);
+            
+            std::ostringstream out;
+            out << "Path (" << fullPath.getPath().size() << " points):";
+            ai->TellPlayer(requester, out.str());
+            
+            if (showFull)
+            {
+                for (size_t i = 0; i < fullPath.getPath().size(); i++)
+                {
+                    PathNodePoint& p = fullPath.getPath()[i];
+                    float dist = prevPos.distance(p.point);
+                    totalDist += dist;
+                    
+                    if (p.point.getMapId() != prevMapId)
+                    {
+                        maps.insert(p.point.getMapId());
+                    }
+                    
+                    switch (p.type)
+                    {
+                        case PathNodeType::NODE_PATH:
+                        case PathNodeType::NODE_PREPATH:
+                            walkDist += dist;
+                            break;
+                        case PathNodeType::NODE_FLIGHTPATH:
+                            flightDist += dist;
+                            break;
+                        case PathNodeType::NODE_TRANSPORT:
+                            transportDist += dist;
+                            break;
+                        case PathNodeType::NODE_TELEPORT:
+                        case PathNodeType::NODE_STATIC_PORTAL:
+                            teleportCount++;
+                            break;
+                        default:
+                            break;
+                    }
+                    
+                    std::ostringstream ptOut;
+                    ptOut << "  " << i << ". " << p.point.getX() << "," << p.point.getY() << "," << p.point.getZ() 
+                          << " m" << p.point.getMapId() << " type:" << (int)p.type;
+                    ai->TellPlayer(requester, ptOut.str());
+                    
+                    prevPos = p.point;
+                    prevMapId = p.point.getMapId();
+                }
+            }
+            else
+            {
+                for (size_t i = 0; i < fullPath.getPath().size(); i++)
+                {
+                    PathNodePoint& p = fullPath.getPath()[i];
+                    float dist = prevPos.distance(p.point);
+                    totalDist += dist;
+                    
+                    if (p.point.getMapId() != prevMapId)
+                    {
+                        maps.insert(p.point.getMapId());
+                    }
+                    
+                    switch (p.type)
+                    {
+                        case PathNodeType::NODE_PATH:
+                        case PathNodeType::NODE_PREPATH:
+                            walkDist += dist;
+                            break;
+                        case PathNodeType::NODE_FLIGHTPATH:
+                            flightDist += dist;
+                            break;
+                        case PathNodeType::NODE_TRANSPORT:
+                            transportDist += dist;
+                            break;
+                        case PathNodeType::NODE_TELEPORT:
+                        case PathNodeType::NODE_STATIC_PORTAL:
+                            teleportCount++;
+                            break;
+                        default:
+                            break;
+                    }
+                    
+                    if (debugMove && i < 20)
+                    {
+                        bot->SummonCreature(2334, p.point.getX(), p.point.getY(), p.point.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f);
+                    }
+                    
+                    prevPos = p.point;
+                    prevMapId = p.point.getMapId();
+                }
+            }
+            
+            if (debugMove && !fullPath.getPath().empty())
+            {
+                bot->SummonCreature(6, fullPath.getFront().getX(), fullPath.getFront().getY(), fullPath.getFront().getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 30000.0f);
+            }
+
+            std::ostringstream summary;
+            summary << "Total: " << totalDist << " yards";
+            ai->TellPlayer(requester, summary.str());
+            
+            std::ostringstream breakdown;
+            breakdown << "Walk: " << walkDist << "y, Fly: " << flightDist << "y, Transport: " << transportDist << "y, Teleport: " << teleportCount << "x";
+            ai->TellPlayer(requester, breakdown.str());
+            
+            if (maps.size() > 1)
+            {
+                std::ostringstream mapInfo;
+                mapInfo << "Maps: ";
+                for (auto m : maps)
+                    mapInfo << m << " ";
+                ai->TellPlayer(requester, mapInfo.str());
+            }
+            
+            std::ostringstream next;
+            next << "Next Point: " << fullPath.getFront().getX() << " " << fullPath.getFront().getY() << " " << fullPath.getFront().getZ();
+            ai->TellPlayer(requester, next.str());
+            return true;
+        }
+
+        ai->TellPlayer(requester, "Usage: position path [<from> |] <to> [full]");
+        return true;
+    }
+
+    if (param.substr(0, 5) == "route")
+    {
+        std::string routeParam = param.size() > 5 ? param.substr(5) : "";
+        while (routeParam.size() > 0 && routeParam[0] == ' ')
+            routeParam = routeParam.substr(1);
+
+        if (routeParam.empty())
+        {
+            ai->TellPlayer(requester, "Usage: position route <from> | <to>");
+            return true;
+        }
+
+        std::string targetParam;
+        WorldPosition startPos(bot);
+        
+        size_t pipePos = routeParam.find('|');
+        if (pipePos == std::string::npos)
+            pipePos = routeParam.find("->");
+        
+        if (pipePos != std::string::npos)
+        {
+            std::string startStr = routeParam.substr(0, pipePos);
+            targetParam = routeParam.substr(pipePos + 1);
+            while (targetParam.size() > 0 && targetParam[0] == ' ')
+                targetParam = targetParam.substr(1);
+            
+            PositionTarget startTarget = ParseLocation(startStr, bot);
+            if (startTarget.valid)
+            {
+                startPos = WorldPosition(startTarget.mapId, startTarget.x, startTarget.y, startTarget.z);
+            }
+            else
+            {
+                ai->TellPlayer(requester, "Usage: position route <from>|<to>");
+                return true;
+            }
+        }
+        else
+        {
+            targetParam = routeParam;
+        }
+
+        PositionTarget target = ParseLocation(targetParam, bot);
+        if (target.valid)
+        {
+            WorldPosition endPos(target.mapId, target.x, target.y, target.z);
+            
+            std::vector<WorldPosition> beginPath, endPath;
+            TravelNodeRoute route = sTravelNodeMap.getRoute(startPos, endPos, beginPath, endPath, bot);
+            
+            if (route.isEmpty())
+            {
+                ai->TellPlayer(requester, "No route found");
+                return true;
+            }
+
+            std::ostringstream out;
+            out << "Route (" << route.getNodes().size() << " nodes):";
+            ai->TellPlayer(requester, out.str());
+            
+            float totalDist = 0.0f;
+            WorldPosition prevPos = startPos;
+            bool debugMove = ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT);
+            
+            for (size_t i = 0; i < route.getNodes().size(); i++)
+            {
+                TravelNode* node = route.getNodes()[i];
+                WorldPosition nodePos = *node->getPosition();
+                float dist = prevPos.distance(nodePos);
+                totalDist += dist;
+                
+                uint32 areaId = sTerrainMgr.GetAreaId(nodePos.getMapId(), nodePos.getX(), nodePos.getY(), nodePos.getZ());
+                const AreaTableEntry* area = GetAreaEntryByAreaID(areaId);
+                std::string areaName = "Unknown";
+                if (area)
+                {
+                    areaName = area->area_name[0];
+                }
+                
+                std::ostringstream nodeOut;
+                nodeOut << "  " << (i + 1) << ". " << node->getName() << " [" << areaName << ", m" << nodePos.getMapId() << "] (" << dist << " yd)";
+                ai->TellPlayer(requester, nodeOut.str());
+                
+                if (debugMove)
+                {
+                    bot->SummonCreature(2334, nodePos.getX(), nodePos.getY(), nodePos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f);
+                }
+                
+                prevPos = nodePos;
+            }
+            
+            if (debugMove && !route.getNodes().empty())
+            {
+                bot->SummonCreature(6, route.getNodes().front()->getPosition()->getX(), 
+                    route.getNodes().front()->getPosition()->getY(), 
+                    route.getNodes().front()->getPosition()->getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 30000.0f);
+            }
+
+            std::ostringstream summary;
+            summary << "Total: " << totalDist << " yards";
+            ai->TellPlayer(requester, summary.str());
+            return true;
+        }
+
+        ai->TellPlayer(requester, "Usage: position route <from> | <to>");
+        return true;
+    }
+
+    if (param.substr(0, 5) == "water")
+    {
+        std::string waterParam = param.size() > 5 ? param.substr(5) : "";
+        while (waterParam.size() > 0 && waterParam[0] == ' ')
+            waterParam = waterParam.substr(1);
+
+        float x, y, z;
+        uint32 mapId;
+
+        if (!waterParam.empty())
+        {
+            PositionTarget target = ParseLocation(waterParam, bot);
+            if (target.valid)
+            {
+                x = target.x;
+                y = target.y;
+                z = target.z;
+                mapId = target.mapId;
+            }
+            else
+            {
+                ai->TellPlayer(requester, "Usage: position water [x y | map x y | map x y z | location]");
+                return true;
+            }
+        }
+        else
+        {
+            x = bot->GetPositionX();
+            y = bot->GetPositionY();
+            z = bot->GetPositionZ();
+            mapId = bot->GetMapId();
+        }
+
+        Map* map = sMapMgr.FindMap(mapId);
+        if (!map)
+        {
+            ai->TellPlayer(requester, "Map not found");
+            return true;
+        }
+
+        const TerrainInfo* terrain = map->GetTerrain();
+        if (!terrain)
+        {
+            ai->TellPlayer(requester, "Terrain not loaded");
+            return true;
+        }
+
+        float groundLevel = 0.0f;
+        float waterLevel = terrain->GetWaterLevel(x, y, z, &groundLevel);
+
+        std::ostringstream out;
+        out << "Pos: " << x << "," << y << "," << z << " m" << mapId;
+        ai->TellPlayer(requester, out.str());
+
+        std::ostringstream groundOut;
+        groundOut << "Ground: " << groundLevel;
+        ai->TellPlayer(requester, groundOut.str());
+
+        std::ostringstream waterOut;
+        waterOut << "Water: " << waterLevel;
+        ai->TellPlayer(requester, waterOut.str());
+
+        if (waterLevel > groundLevel)
+        {
+            float waterDepth = waterLevel - groundLevel;
+            if (z >= waterLevel)
+            {
+                ai->TellPlayer(requester, "State: Above water surface");
+            }
+            else if (z >= groundLevel)
+            {
+                std::ostringstream inWater;
+                inWater << "State: In water (depth: " << waterDepth << " yards)";
+                ai->TellPlayer(requester, inWater.str());
+            }
+            else
+            {
+                ai->TellPlayer(requester, "State: Underwater (swimming/flying below surface)");
+            }
+        }
+        else
+        {
+            ai->TellPlayer(requester, "State: Not in water (no water at this location)");
+        }
+
+        if (z < groundLevel - 0.5f)
+        {
+            float underGround = groundLevel - z;
+            std::ostringstream underground;
+            underground << "Underground: Yes (" << underGround << " yards below ground)";
+            ai->TellPlayer(requester, underground.str());
+        }
+        else
+        {
+            ai->TellPlayer(requester, "Underground: No");
+        }
+
+        return true;
+    }
+
+    // Check if position is above ground or underground
+    if (param.substr(0, 6) == "ground")
+    {
+        std::string groundParam = param.size() > 7 ? param.substr(7) : "";
+
+        WorldPosition pos(bot);
+        if (!groundParam.empty())
+        {
+            PositionTarget target = ParseLocation(groundParam, bot);
+            if (target.valid)
+            {
+                pos = WorldPosition(target.mapId, target.x, target.y, target.z);
+            }
+            else
+            {
+                ai->TellPlayer(requester, "Usage: position ground [x y | map x y | map x y z | location]");
+                return true;
+            }
+        }
+
+        std::ostringstream out;
+        out << pos.getX() << ", " << pos.getY() << ", " << pos.getZ() << " m" << pos.getMapId() << ": ";
+        out << (pos.isUnderground() ? "Underground" : "Above ground");
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    // If param is empty, show bot's position
+    if (param.empty())
+    {
+        std::ostringstream out;
+        out << bot->GetPositionX() << " " << bot->GetPositionY() << " " << bot->GetPositionZ() << " " << bot->GetMapId() << " " << bot->GetOrientation();
+        uint32 area = sServerFacade.GetAreaId(bot);
+        if (const AreaTableEntry* areaEntry = GetAreaEntryByAreaID(area))
+        {
+            if (AreaTableEntry const* zoneEntry = areaEntry->zone ? GetAreaEntryByAreaID(areaEntry->zone) : areaEntry)
+                out << " |" << zoneEntry->area_name[0] << "|";
+        }
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    // Try to find player by name
+    if (Player* target = sObjectMgr.GetPlayer(param.c_str()))
+    {
+        std::ostringstream out;
+        out << target->GetName() << ": " << target->GetPositionX() << " " << target->GetPositionY() << " " << target->GetPositionZ() << " " << target->GetMapId();
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    // Try to find creature by name (search nearby)
+    std::list<Unit*> targets;
+    AnyUnitInObjectRangeCheck u_check(bot, 100000.0f);
+    UnitListSearcher<AnyUnitInObjectRangeCheck> searcher(targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 100000.0f);
+    
+    for (Unit* u : targets)
+    {
+        if (u && u->GetTypeId() == TYPEID_UNIT)
+        {
+            Creature* c = (Creature*)u;
+            if (c->GetName() == param)
+            {
+                std::ostringstream out;
+                out << c->GetName() << ": " << c->GetPositionX() << " " << c->GetPositionY() << " " << c->GetPositionZ() << " " << c->GetMapId();
+                ai->TellPlayer(requester, out.str());
+                return true;
+            }
+        }
+    }
+
+    // Try parsing as guid or link
+    uint32 guid = 0;
+    try { guid = std::stoul(param); } catch (...) {}
+
+    if (guid > 0)
+    {
+        if (GameObject* go = bot->GetMap()->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, guid)))
+        {
+            std::ostringstream out;
+            out << "GO " << guid << ": " << go->GetPositionX() << " " << go->GetPositionY() << " " << go->GetPositionZ() << " " << go->GetMapId();
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+        if (Unit* u = bot->GetMap()->GetUnit(ObjectGuid(HIGHGUID_UNIT, guid)))
+        {
+            std::ostringstream out;
+            out << "Unit " << guid << ": " << u->GetPositionX() << " " << u->GetPositionY() << " " << u->GetPositionZ() << " " << u->GetMapId();
+            ai->TellPlayer(requester, out.str());
+            return true;
+        }
+    }
+
+    ai->TellPlayer(requester, "Usage: position [zone|teleport|distance|path|<name/guid>]");
     return true;
 }
 
@@ -1622,7 +3740,6 @@ bool DebugAction::HandleItem(Event& event, Player* requester, const std::string&
     return true;
 }
 
-
 bool DebugAction::HandleRPG(Event& event, Player* requester, const std::string& text)
 {
     std::ostringstream out;
@@ -1703,7 +3820,7 @@ bool DebugAction::HandleTravel(Event& event, Player* requester, const std::strin
             return false;
 
         std::vector<WorldPosition> beginPath, endPath;
-        TravelNodeRoute route = sTravelNodeMap.getRoute(botPos, *point, beginPath, bot);
+        TravelNodeRoute route = sTravelNodeMap.getRoute(botPos, *point, beginPath, endPath, bot);
 
         std::ostringstream out; out << "Traveling to " << dest->GetTitle() << ": ";
 
@@ -2028,14 +4145,31 @@ bool DebugAction::HandleNC(Event& event, Player* requester, const std::string& t
 
                     if (action)
                     {
-                        ai->TellPlayerNoFacing(requester, "a:  " + nextAction->getName() + triggerNode->getName() + (action->isUseful() ? " [usefull]" : "") + (action->isPossible() ? " [possible]" : "") + "(" + std::to_string(nextAction->getRelevance()) + ")"
-                        , PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false, false);
+                        std::ostringstream out;
+                        out << "a:  ";
+                        out << nextAction->getName();
+                        out << triggerNode->getName();
+                        out << (action->isUseful() ? " [usefull]" : "");
+                        out << (action->isPossible() ? " [possible]" : "");
+                        out << "(";
+                        out << std::setprecision(3);
+                        out << nextAction->getRelevance();
+                        out << ")";
+
+                        ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false, false);
                     }
                     else
                     {
-                        ai->TellPlayerNoFacing(requester,
-                                               "a:  [unknown]" + nextAction->getName() + triggerNode->getName() + " (" + std::to_string(nextAction->getRelevance()) + ")",
-                                               PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false, false);
+                        std::ostringstream out;
+                        out << "a:  [unknown]";
+                        out << nextAction->getName();
+                        out << triggerNode->getName();
+                        out << " (";
+                        out << std::setprecision(3);
+                        out << nextAction->getRelevance();
+                        out << ")";
+
+                        ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false, false);
                     }
                     
                 }
@@ -2774,5 +4908,974 @@ bool DebugAction::HandleSound(Event& event, Player* requester, const std::string
 {
     uint32 soundEffect = stoi(text.substr(6));
     bot->PlayDistanceSound(soundEffect);
+    return true;
+}
+
+bool DebugAction::HandleStuck(Event& event, Player* requester, const std::string& text)
+{
+    bool shouldReset = (text.find("reset") != std::string::npos);
+
+    ai->TellPlayer(requester, "=== Stuck Bot Diagnostic ===");
+
+    WorldPosition botPos(bot);
+    std::ostringstream posOut;
+    posOut << "Pos: " << botPos.getX() << "," << botPos.getY() << "," << botPos.getZ() << " (" << botPos.getAreaName() << ")";
+    ai->TellPlayer(requester, posOut.str());
+
+    bool isMoving = bot->IsMoving();
+    ai->TellPlayer(requester, std::string("IsMoving: ") + (isMoving ? "yes" : "no"));
+
+    bool isMounted = bot->IsMounted();
+    ai->TellPlayer(requester, std::string("IsMounted: ") + (isMounted ? "yes" : "no"));
+
+    bool isTaxiFlying = bot->IsTaxiFlying();
+    ai->TellPlayer(requester, std::string("IsTaxiFlying: ") + (isTaxiFlying ? "yes" : "no"));
+
+    bool isInCombat = bot->IsInCombat();
+    ai->TellPlayer(requester, std::string("IsInCombat: ") + (isInCombat ? "yes" : "no"));
+
+    bool isDead = !bot->IsAlive();
+    ai->TellPlayer(requester, std::string("IsDead: ") + (isDead ? "yes" : "no"));
+
+    TravelTarget* travelTarget = AI_VALUE(TravelTarget*, "travel target");
+    bool canFreeMove = false;
+    if (travelTarget)
+    {
+        std::ostringstream ss;
+        ss << "Travel Target: ";
+        switch (travelTarget->GetStatus())
+        {
+            case TravelStatus::TRAVEL_STATUS_NONE: ss << "NONE"; break;
+            case TravelStatus::TRAVEL_STATUS_PREPARE: ss << "PREPARE"; break;
+            case TravelStatus::TRAVEL_STATUS_WORK: ss << "WORK"; break;
+            case TravelStatus::TRAVEL_STATUS_TRAVEL: ss << "TRAVEL"; break;
+            case TravelStatus::TRAVEL_STATUS_READY: ss << "READY"; break;
+            case TravelStatus::TRAVEL_STATUS_EXPIRED: ss << "EXPIRED"; break;
+            case TravelStatus::TRAVEL_STATUS_COOLDOWN: ss << "COOLDOWN"; break;
+            default: ss << "UNKNOWN"; break;
+        }
+        ss << " (" << travelTarget->GetTimeLeft() / 1000 << "s left)";
+        ai->TellPlayer(requester, ss.str());
+
+        if (travelTarget->GetPosition())
+        {
+            std::ostringstream ss2;
+            ss2 << "Target: " << travelTarget->GetPosition()->getX() << "," 
+                << travelTarget->GetPosition()->getY() << "," << travelTarget->GetPosition()->getZ() 
+                << " (" << travelTarget->GetPosition()->getAreaName() << ")";
+            ai->TellPlayer(requester, ss2.str());
+
+            float dist = botPos.distance(*travelTarget->GetPosition());
+            std::ostringstream ss3;
+            ss3 << "Distance to target: " << uint32(dist) << "y";
+            ai->TellPlayer(requester, ss3.str());
+        }
+
+        std::ostringstream ss4;
+        ss4 << "Retry: " << travelTarget->GetRetryCount(true) << " (move), " << travelTarget->GetRetryCount(false) << " (target)";
+        ai->TellPlayer(requester, ss4.str());
+
+        canFreeMove = CanFreeMoveValue::CanFreeMoveTo(ai, travelTarget->GetPosStr());
+    }
+
+    bool canMoveAround = AI_VALUE(bool, "can move around");
+    ai->TellPlayer(requester, std::string("can move around: ") + (canMoveAround ? "true" : "FALSE!"));
+
+    bool travelTargetActive = AI_VALUE(bool, "travel target active");
+    ai->TellPlayer(requester, std::string("travel target active: ") + (travelTargetActive ? "true" : "false"));
+
+    bool travelTargetTraveling = AI_VALUE(bool, "travel target traveling");
+    ai->TellPlayer(requester, std::string("travel target traveling: ") + (travelTargetTraveling ? "true" : "FALSE!"));
+
+    if (travelTarget && travelTarget->GetPosition())
+    {
+        ai->TellPlayer(requester, std::string("can free move to target: ") + (canFreeMove ? "true" : "FALSE!"));
+        
+        bool differentMap = (travelTarget->GetPosition()->getMapId() != bot->GetMapId());
+        if (differentMap)
+        {
+            ai->TellPlayer(requester, ">>> TARGET IS ON DIFFERENT MAP! Needs taxi/transport.");
+            ai->TellPlayer(requester, "    Bot map: " + std::to_string(bot->GetMapId()) + ", Target map: " + std::to_string(travelTarget->GetPosition()->getMapId()));
+        }
+    }
+
+    uint32 posLastChange = MEM_AI_VALUE(WorldPosition, "current position")->LastChangeDelay();
+    std::ostringstream ss;
+    ss << "Position last changed: " << posLastChange << "s ago";
+    ai->TellPlayer(requester, ss.str());
+
+    bool isStuck = (posLastChange > 60 && travelTargetActive);
+    if (isStuck)
+    {
+        ai->TellPlayer(requester, ">>> BOT IS STUCK! Position unchanged for > 60s with active travel target!");
+    }
+
+    Group* group = bot->GetGroup();
+    if (group)
+    {
+        bool isLeader = group->IsLeader(bot->GetObjectGuid());
+        ai->TellPlayer(requester, std::string("In group, is leader: ") + (isLeader ? "yes" : "no"));
+
+        if (!isLeader)
+        {
+            bool hasFollow = ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT);
+            bool hasStay = ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
+            ai->TellPlayer(requester, std::string("Has follow strategy: ") + (hasFollow ? "yes" : "no"));
+            ai->TellPlayer(requester, std::string("Has stay strategy: ") + (hasStay ? "yes" : "no"));
+        }
+    }
+
+    if (shouldReset && travelTarget)
+    {
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, ">>> Resetting travel target...");
+        travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_NONE);
+        travelTarget->SetForced(false);
+        RESET_AI_VALUE(TravelTarget*, "travel target");
+        ai->TellPlayer(requester, ">>> Travel target reset! Bot should find new target.");
+    }
+
+    ai->TellPlayer(requester, "");
+    ai->TellPlayer(requester, "=== Movement Blockers ===");
+
+    bool isTrading = bot->GetTradeData() != nullptr;
+    ai->TellPlayer(requester, std::string("IsTrading: ") + (isTrading ? "TRUE - BLOCKS MOVEMENT!" : "no"));
+
+    bool groupReady = AI_VALUE(bool, "group ready");
+    ai->TellPlayer(requester, std::string("Group ready: ") + (groupReady ? "yes" : "NO - BLOCKS MOVEMENT!"));
+
+    bool castNcActive = AI_VALUE2(bool, "trigger active", "castnc");
+    ai->TellPlayer(requester, std::string("CastNC active: ") + (castNcActive ? "TRUE - BLOCKS MOVEMENT!" : "no"));
+
+    bool hasWander = ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT);
+    if (hasWander)
+    {
+        float dist = AI_VALUE2(float, "distance", "master target");
+        float wanderMax = ai->GetRange("wandermax");
+        bool wanderTooFar = dist > wanderMax;
+        ai->TellPlayer(requester, std::string("Wander strategy: yes (dist=") + std::to_string((int)dist) + ", max=" + std::to_string((int)wanderMax) + ") " + (wanderTooFar ? "- BLOCKS MOVEMENT!" : ""));
+    }
+
+    ai->TellPlayer(requester, "");
+    ai->TellPlayer(requester, "=== Path/Rout e Status ===");
+    LastMovement& lastMove = *context->GetValue<LastMovement&>("last movement");
+    bool pathEmpty = lastMove.lastPath.empty();
+    ai->TellPlayer(requester, std::string("lastPath empty: ") + (pathEmpty ? "YES" : "no"));
+    if (!pathEmpty)
+    {
+        ai->TellPlayer(requester, "lastPath points: " + std::to_string(lastMove.lastPath.getPath().size()));
+        ai->TellPlayer(requester, "lastPath end: " + std::to_string(lastMove.lastPath.getBack().getX()) + "," + 
+            std::to_string(lastMove.lastPath.getBack().getY()) + "," + 
+            std::to_string(lastMove.lastPath.getBack().getZ()));
+    }
+
+    ai->TellPlayer(requester, "");
+    ai->TellPlayer(requester, "=== Other Status ===");
+
+    bool hasStay = ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
+    ai->TellPlayer(requester, std::string("Has stay strategy: ") + (hasStay ? "yes" : "no"));
+
+    bool hasFollow = ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT);
+    ai->TellPlayer(requester, std::string("Has follow strategy: ") + (hasFollow ? "yes" : "no"));
+
+    bool hasGuard = ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT);
+    ai->TellPlayer(requester, std::string("Has guard strategy: ") + (hasGuard ? "yes" : "no"));
+
+    //uint32 auraCount = bot->GetAuraCount();
+    //ai->TellPlayer(requester, "Aura count: " + std::to_string(auraCount));
+
+    ai->TellPlayer(requester, "");
+    ai->TellPlayer(requester, "=== Suggested Actions ===");
+    if (!canMoveAround)
+    {
+        ai->TellPlayer(requester, "- Check: is bot in combat? Is bot dead? Is bot rooted?");
+    }
+    if (travelTarget && travelTarget->GetStatus() == TravelStatus::TRAVEL_STATUS_READY && !isMoving)
+    {
+        ai->TellPlayer(requester, "- Try: .rndbot cmd <bot> reset travel target");
+    }
+    if (posLastChange > 120)
+    {
+        ai->TellPlayer(requester, "- Bot may need teleportation: .rndbot debug <bot> position teleport");
+    }
+    if (pathEmpty && travelTargetActive)
+    {
+        ai->TellPlayer(requester, "- Try: .rndbot debug <bot> position route <destination>");
+    }
+
+    return true;
+}
+
+bool DebugAction::HandleCombat(Event& event, Player* requester, const std::string& text)
+{
+    ai->TellPlayer(requester, "=== Combat State Diagnostic ===");
+
+    bool unitFlagInCombat = bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IN_COMBAT);
+    ai->TellPlayer(requester, std::string("UNIT_FLAG_IN_COMBAT: ") + (unitFlagInCombat ? "SET" : "clear"));
+
+    bool isInCombat = bot->IsInCombat();
+    ai->TellPlayer(requester, std::string("IsInCombat(): ") + (isInCombat ? "true" : "false"));
+
+    ai->TellPlayer(requester, "CMaNGOS attackers: " + std::to_string(bot->getAttackers().size()));
+
+    Unit* victim = bot->GetVictim();
+    ai->TellPlayer(requester, std::string("victim: ") + (victim ? victim->GetName() : "none"));
+
+    ai->TellPlayer(requester, "--- BotAI State ---");
+
+    Unit* aiTarget = *ai->GetAiObjectContext()->GetValue<Unit*>("current target");
+    if (aiTarget)
+    {
+        std::ostringstream targetOut;
+        targetOut << "current target: " << aiTarget->GetName()
+                  << " (" << aiTarget->GetObjectGuid().GetCounter() << ")";
+        ai->TellPlayer(requester, targetOut.str());
+
+        bool isInvalid = ai->GetAiObjectContext()->GetValue<bool>("invalid target", "current target")->Get();
+        ai->TellPlayer(requester, std::string("invalid: ") + (isInvalid ? "YES" : "no"));
+    }
+    else
+    {
+        ai->TellPlayer(requester, "current target: none");
+    }
+
+    bool hasAttackers = ai->GetAiObjectContext()->GetValue<bool>("has attackers")->Get();
+    ai->TellPlayer(requester, std::string("has attackers: ") + (hasAttackers ? "true" : "false"));
+
+    ai->TellPlayer(requester, "Selection: " + std::to_string(bot->GetSelectionGuid().GetCounter()));
+
+    return true;
+}
+
+bool DebugAction::HandleNodes(Event& event, Player* requester, const std::string& text)
+{
+    WorldPosition pos(bot);
+    ai->TellPlayer(requester, "=== Debug: getRoute Pathfinding Analysis ===");
+    ai->TellPlayer(requester, "Bot position: " + pos.print());
+    
+    bool inCombat = bot->IsInCombat();
+    bool inWater = bot->IsInWater();
+    bool isUnderWater = bot->IsUnderwater();
+    ai->TellPlayer(requester, "Bot state: combat=" + std::string(inCombat ? "YES" : "NO") + 
+                   " water=" + std::string(inWater ? "YES" : "NO") + 
+                   " underwater=" + std::string(isUnderWater ? "YES" : "NO"));
+
+    std::vector<TravelNode*> allNodes = sTravelNodeMap.getNodes(pos, -1.0f);
+    ai->TellPlayer(requester, "Total nodes on map " + std::to_string(pos.getMapId()) + ": " + std::to_string(allNodes.size()));
+
+    if (allNodes.empty())
+    {
+        ai->TellPlayer(requester, ">>> No nodes at all on this map!");
+        return true;
+    }
+
+    ai->TellPlayer(requester, "");
+    ai->TellPlayer(requester, "=== getRoute Step 1: Find START nodes (closest 5) ===");
+
+    std::sort(allNodes.begin(), allNodes.end(), [pos](TravelNode* i, TravelNode* j) { 
+        return i->getPosition()->sqDistance(pos) < j->getPosition()->sqDistance(pos); 
+    });
+
+    std::vector<TravelNode*> startNodes;
+    uint32 startNr = std::min(5u, (uint32)allNodes.size());
+    for (uint32 i = 0; i < startNr; i++)
+        startNodes.push_back(allNodes[i]);
+
+    ai->TellPlayer(requester, "Testing pathfinding to each of the 5 closest nodes:");
+
+    int startNodesWithPath = 0;
+    for (uint32 i = 0; i < startNodes.size(); i++)
+    {
+        auto& node = startNodes[i];
+        
+        TravelNodeMap::PathFindResult result = sTravelNodeMap.testPathToLoop(pos, *node->getPosition(), bot, 0, {}, "debug");
+        
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Start Node " + std::to_string(i+1) + ": " + node->getName());
+        ai->TellPlayer(requester, "  Distance: " + std::to_string(pos.distance(*node->getPosition())) + "y, PathType: " + 
+            (result.type == PATHFIND_NORMAL ? "NORMAL" : 
+             result.type == PATHFIND_INCOMPLETE ? "INCOMPLETE" : 
+             result.type == PATHFIND_NOPATH ? "NOPATH" : "UNKNOWN"));
+        
+        if (result.path.size() > 0)
+        {
+            ai->TellPlayer(requester, "  Path points: " + std::to_string(result.path.size()) + ", stops " + 
+                std::to_string(result.path.back().distance(bot)) + "y from bot");
+        }
+        
+        if (node->getPosition()->isPathTo(result.path))
+        {
+            ai->TellPlayer(requester, "  >>> FULL PATH to node");
+            startNodesWithPath++;
+        }
+        else
+        {
+            ai->TellPlayer(requester, "  >> NO FULL PATH");
+        }
+    }
+
+    ai->TellPlayer(requester, "");
+    ai->TellPlayer(requester, "=== getRoute Step 2: Check network routes ===");
+
+    int nodesWithRoute = 0;
+    for (uint32 i = 0; i < startNodes.size(); i++)
+    {
+        auto& startNode = startNodes[i];
+        
+        float dist = pos.distance(*startNode->getPosition());
+        
+        std::unique_ptr<PathFinder> pathfinder = std::make_unique<PathFinder>(bot);
+        pathfinder->setAreaCost(NAV_AREA_WATER, 10.0f);
+        pathfinder->setAreaCost(12, 5.0f);
+        pathfinder->setAreaCost(13, 20.0f);
+        pathfinder->calculate(pos.getVector3(), startNode->getPosition()->getVector3(), false);
+        
+        PointsArray points = pathfinder->getPath();
+        bool hasFullPath = false;
+        if (!points.empty())
+        {
+            Vector3 lastVec = points.back();
+            WorldPosition lastPoint(bot->GetMapId(), lastVec.x, lastVec.y, lastVec.z);
+            if (dist - pos.distance(lastPoint) <= 1.0f)
+                hasFullPath = true;
+        }
+
+        if (!hasFullPath)
+            continue;
+
+        std::vector<TravelNode*> reachable = startNode->getNodeMap(false, {}, false);
+        
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, "Start: " + startNode->getName() + " (has path)");
+        ai->TellPlayer(requester, "  Can reach: " + std::to_string(reachable.size()) + " nodes in network");
+        
+        if (reachable.size() > 0)
+        {
+            std::string nodeList;
+            uint32 count = std::min(10u, (uint32)reachable.size());
+            for (uint32 j = 0; j < count; j++)
+            {
+                nodeList += reachable[j]->getName();
+                if (j < count - 1)
+                    nodeList += ", ";
+            }
+            if (reachable.size() > count)
+                nodeList += "...";
+            ai->TellPlayer(requester, "  Nodes: " + nodeList);
+        }
+        
+        if (reachable.size() > 10)
+        {
+            nodesWithRoute++;
+            ai->TellPlayer(requester, "  >>> HAS NETWORK ROUTES");
+        }
+        else
+        {
+            ai->TellPlayer(requester, "  >> LIMITED NETWORK (only " + std::to_string(reachable.size()) + " nodes)");
+        }
+    }
+
+    ai->TellPlayer(requester, "");
+    ai->TellPlayer(requester, "=== getRoute Step 3: Try actual route (like bot uses) ===");
+
+    WorldPosition targetPos = pos;
+    targetPos.coord_x += 100.0f;
+    targetPos.coord_y += 100.0f;
+
+    std::vector<WorldPosition> beginPath, endPath;
+    TravelNodeRoute route = sTravelNodeMap.getRoute(pos, targetPos, beginPath, endPath, bot);
+
+    if (!route.isEmpty())
+    {
+        ai->TellPlayer(requester, ">>> ROUTE FOUND!");
+        ai->TellPlayer(requester, "  Nodes in route: " + std::to_string(route.getNodes().size()));
+    }
+    else
+    {
+        ai->TellPlayer(requester, ">>> NO ROUTE FOUND");
+        ai->TellPlayer(requester, "  This means bot cannot travel using the node network");
+    }
+
+    ai->TellPlayer(requester, "");
+    ai->TellPlayer(requester, "=== Summary ===");
+    ai->TellPlayer(requester, "Start nodes with full path: " + std::to_string(startNodesWithPath) + "/5");
+    ai->TellPlayer(requester, "Start nodes with network routes: " + std::to_string(nodesWithRoute));
+
+    if (startNodesWithPath == 0)
+    {
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, ">>> PROBLEM: Bot cannot path to ANY start node!");
+        ai->TellPlayer(requester, "  - Bot may be in water, indoors, void, or no navmesh");
+    }
+    else if (nodesWithRoute == 0)
+    {
+        ai->TellPlayer(requester, "");
+        ai->TellPlayer(requester, ">>> PROBLEM: Start nodes have no network routes!");
+        ai->TellPlayer(requester, "  - Try: debug gen path (mod only)");
+    }
+
+    return true;
+}
+
+bool DebugAction::HandleActivity(Event& event, Player* requester, const std::string& text)
+{
+    std::string action = ai->HandleRemoteCommand("action");
+
+    bool isActive = ai->AllowActivity();
+
+    std::string stateName;
+    switch (ai->GetState())
+    {
+        case BotState::BOT_STATE_COMBAT: stateName = "combat"; break;
+        case BotState::BOT_STATE_NON_COMBAT: stateName = "non-combat"; break;
+        case BotState::BOT_STATE_DEAD: stateName = "dead"; break;
+        case BotState::BOT_STATE_REACTION: stateName = "reaction"; break;
+        default: stateName = "unknown"; break;
+    }
+
+    std::string priorityTypeName;
+    switch (ai->GetPriorityType())
+    {
+        case ActivePiorityType::IS_REAL_PLAYER: priorityTypeName = "real_player"; break;
+        case ActivePiorityType::HAS_REAL_PLAYER_MASTER: priorityTypeName = "has_master"; break;
+        case ActivePiorityType::IN_GROUP_WITH_REAL_PLAYER: priorityTypeName = "group_with_player"; break;
+        case ActivePiorityType::IN_BATTLEGROUND: priorityTypeName = "battleground"; break;
+        case ActivePiorityType::IN_INSTANCE: priorityTypeName = "instance"; break;
+        case ActivePiorityType::VISIBLE_FOR_PLAYER: priorityTypeName = "visible_for_player"; break;
+        case ActivePiorityType::IS_ALWAYS_ACTIVE: priorityTypeName = "always_active"; break;
+        case ActivePiorityType::IN_COMBAT: priorityTypeName = "combat"; break;
+        case ActivePiorityType::IN_BG_QUEUE: priorityTypeName = "bg_queue"; break;
+        case ActivePiorityType::IN_LFG: priorityTypeName = "lfg"; break;
+        case ActivePiorityType::NEARBY_PLAYER: priorityTypeName = "nearby_player"; break;
+        case ActivePiorityType::PLAYER_FRIEND: priorityTypeName = "friend"; break;
+        case ActivePiorityType::PLAYER_GUILD: priorityTypeName = "guild"; break;
+        case ActivePiorityType::NO_PATH: priorityTypeName = "no_path"; break;
+        case ActivePiorityType::IN_ACTIVE_AREA: priorityTypeName = "active_area"; break;
+        case ActivePiorityType::IN_ACTIVE_MAP: priorityTypeName = "active_map"; break;
+        case ActivePiorityType::IN_INACTIVE_MAP: priorityTypeName = "inactive_map"; break;
+        case ActivePiorityType::IN_EMPTY_SERVER: priorityTypeName = "empty_server"; break;
+        default: priorityTypeName = "unknown"; break;
+    }
+
+    auto bracket = ai->GetPriorityBracket(ai->GetPriorityType());
+    float activityPct = sRandomPlayerbotMgr.getActivityPercentage();
+
+    std::ostringstream out;
+    out << "State: " << stateName << ", Active: " << (isActive ? "yes" : "no");
+    out << ", PriorityType: " << priorityTypeName;
+    out << ", Bracket: " << bracket.first << "-" << bracket.second;
+    out << ", Activity%: " << std::fixed << std::setprecision(1) << activityPct;
+    if (!action.empty())
+        out << ", Action: " << action;
+
+    ai->TellPlayer(requester, out.str());
+    return true;
+}
+
+bool DebugAction::HandleTransanal(Event& event, Player* requester, const std::string& text)
+{
+    sLog.outString("Starting transport analysis...");
+
+    sPlayerbotAIConfig.openLog("transportanalysis.csv", "w", true);
+
+    uint32 shiftx = 0;
+    uint32 shifty = 0;
+
+    for (auto& [mapId, map] : sMapMgr.Maps())
+    {
+        for (auto& transport : WorldPosition(map->GetId(), 1, 1).getTransports())
+        {
+            std::string transportName = transport->GetName();
+            GameObjectInfo const* data = sGOStorage.LookupEntry<GameObjectInfo>(transport->GetEntry());
+            if (transportName.empty())
+                transportName = data->name;
+
+            sLog.outString("transport %s", transportName.c_str());
+
+            MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
+            if (!mmap->GetModelNavMeshQuery(transport->GetDisplayId()))
+            {
+                sLog.outString("%d has no ModelNavMeshQuery", transport->GetDisplayId());
+
+                continue;
+            }
+
+            BarGoLink bar(18 * 80 * 80 * 80);
+
+            shifty += 1;
+
+            shiftx = 0;
+
+            for (float rotation = 0.0f; rotation <= 160.0f; rotation += 20.0f)
+            {
+                shiftx += 1;
+                float rad = rotation * M_PI / 180.0f;
+
+                transport->UpdatePosition(0, 0, 0, rad);
+
+                WorldPosition transPos(transport);
+                transPos.SetTranpotHeightToFloor(transport->GetEntry());
+
+                std::vector<WorldPosition> hitPoints;
+
+                sLog.outString("rotation %d", (int32)rotation);
+
+                for (float x = -50.0f; x <= 50.0f; x += 2.0f)
+                {
+                    for (float y = -50.0f; y <= 50.0f; y += 2.0f)
+                    {
+                        for (float z = -50.0f; z <= 50.0f; z += 2.0f)
+                        {
+                            bar.step();
+                            WorldPosition testPos = transPos + WorldPosition(0, x, y, z);
+
+                            float hx = x, hy = y, hz = z - 50;
+
+#ifndef MANGOSBOT_TWO
+                            bool hasHit = map->GetHitPosition(testPos.getX(), testPos.getY(), testPos.getZ(), hx, hy, hz, 0.0f);
+#else
+                            bool hasHit = map->GetHitPosition(testPos.getX(), testPos.getY(), testPos.getZ(), hx, hy, hz, 0, 0.0f);
+#endif
+
+                            if (!hasHit)
+                                continue;
+
+                            WorldPosition hitPos(0, hx, hy, hz);
+
+                            hasHit = false;
+
+                            for (auto& hp : hitPoints)
+                                if (hp.sqDistance(hitPos) < 0.1)
+                                {
+                                    hasHit = true;
+                                    break;
+                                }
+
+                            if (!hasHit)
+                                hitPoints.push_back(hitPos);
+                        }
+                    }
+                }
+
+                if (hitPoints.empty())
+                    continue;
+
+                WorldSession* session = new WorldSession(0, NULL, SEC_PLAYER,
+#ifdef MANGOSBOT_TWO
+                    2,
+                    0,
+                    LOCALE_enUS,
+                    "",
+                    0,
+                    0,
+                    false);
+#endif
+#ifdef MANGOSBOT_ONE
+                    2, 0, LOCALE_enUS, "", 0, 0, false);
+#endif
+#ifdef MANGOSBOT_ZERO
+                    0, LOCALE_enUS, "", 0);
+#endif
+
+                    session->SetNoAnticheat();
+
+                    Player* tempPlayer = new Player(session);
+
+                    tempPlayer->Create(sObjectMgr.GeneratePlayerLowGuid(), "test", 1, 1, 0,
+                        0, // skinColor,
+                        0,
+                        0,
+                        0, // hairColor,
+                        0,
+                        0);
+                    tempPlayer->AddToWorld();
+                    tempPlayer->SetMap(map.get());
+                    tempPlayer->SetTransport(transport);
+                    tempPlayer->SetPosition(transPos.getX(), transPos.getY(), transPos.getZ(), 0);
+
+                    std::vector<WorldPosition> rhitPoints = hitPoints;
+
+                    std::reverse(rhitPoints.begin(), rhitPoints.end());
+
+                    std::vector<std::vector<WorldPosition>> layers;
+                    std::unordered_map<WorldPosition, uint32> found;
+
+                    sLog.outString("hitting done");
+
+                    BarGoLink bar1(hitPoints.size());
+
+                    layers.push_back(hitPoints);
+
+                    for (auto& start : hitPoints)
+                    {
+                        if (found[start])
+                            continue;
+
+                        bar1.step();
+                        for (auto& end : rhitPoints)
+                        {
+                            if (end == start)
+                                continue;
+
+                            if (found[end])
+                                continue;
+
+                            std::unique_ptr<PathFinder> pathfinder = std::make_unique<PathFinder>(tempPlayer, true);
+
+                            WorldPosition tStart = start, tEnd = end;
+                            tStart.CalculatePassengerOffset(transport);
+                            tEnd.CalculatePassengerOffset(transport);
+                            //tStart.CalculatePassengerPosition(transport);
+                            //tEnd.CalculatePassengerPosition(transport);
+
+                            pathfinder->calculate(tStart.getVector3(), tEnd.getVector3(), false);
+
+                            if (pathfinder->getPathType() != PATHFIND_NORMAL)
+                                continue;
+
+                            if (pathfinder->getPath().size() < 3)
+                                continue;
+
+                            std::vector<WorldPosition> path = start.fromPointsArray(pathfinder->getPath());
+
+                            std::set<uint32> inLayer;
+
+                            std::vector<WorldPosition> realPath = {start, end};
+
+                            for (auto& p : path)
+                            {
+                                if (p == start)
+                                    continue;
+
+                                if (p == end)
+                                    continue;
+
+                                if (std::find(realPath.begin(), realPath.end(), p) != realPath.end())
+                                    continue;
+
+                                WorldPosition rp = p;
+                                rp.CalculatePassengerPosition(transport);
+                                //rp.CalculatePassengerOffset(transport);
+
+                                WorldPosition realHp;
+
+                                for (auto& hp : hitPoints)
+                                {
+                                    if (rp.distance(hp) < 2)
+                                    {
+                                        realHp = hp;
+                                        break;
+                                    }
+                                }
+
+                                if (realHp)
+                                {
+                                    if (found[realHp])
+                                        inLayer.insert(found[realHp]);
+                                    else
+                                        realPath.push_back(realHp);
+                                }
+                            }
+
+                            if (realPath.size() < 3)
+                                continue;
+
+                            if (inLayer.empty())
+                            {
+                                layers.push_back(realPath);
+                                for (auto& hp : realPath)
+                                    found[hp] = layers.size();
+                            }
+                            else
+                            {
+                                std::vector<std::vector<WorldPosition>> newLayers = {hitPoints, realPath};
+
+                                for (uint32 i = 1; i < layers.size(); i++)
+                                {
+                                    if (inLayer.find(i) != inLayer.end())
+                                        newLayers[1].insert(newLayers[1].end(), layers[i].begin(), layers[i].end());
+                                    else
+                                        newLayers.push_back(layers[i]);
+                                }
+
+                                layers = newLayers;
+                                found.clear();
+
+                                for (uint32 i = 1; i < layers.size(); i++)
+                                {
+                                    for (auto& p : layers[i])
+                                    {
+                                        found[p] = i;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    int layerNr = 0;
+                    for (auto& layer : layers)
+                    {
+                        float minZ = FLT_MAX, maxZ = -FLT_MAX;
+                        for (auto& p : layer)
+                        {
+                            float relZ = p.getZ() - transPos.getZ();
+                            if (relZ < minZ)
+                                minZ = relZ;
+                            if (relZ > maxZ)
+                                maxZ = relZ;
+                        }
+
+                        std::ostringstream out;
+
+                        out << transport->GetEntry() << ",";
+                        out << transportName << ",";
+                        out << rotation << ",";
+                        out << transport->GetOrientation() << ",";
+                        out << rotation << ",";
+                        out << layerNr << ",";
+                        out << minZ << ",";
+                        out << maxZ << ",";
+
+                        out << "\"MULTILINESTRING(";
+                        bool first = true;
+                        for (auto& p : layer)
+                        {
+                            float relX = p.getX() * 10 + shiftx * 1100;
+                            float relY = p.getY() * 10 + shifty * 1100;
+                            float relZ = p.getZ() * 10;
+                            if (!first)
+                                out << ",";
+                            out << "(" << relX << " " << relY << " " << relZ << ",";
+                            out << relX + relZ * 0.2 << " " << relY + relZ + 0.8 << " " << relZ << ")";
+                            first = false;
+                        }
+                        out << ")\"";
+
+                        sPlayerbotAIConfig.log("transportanalysis.csv", out.str().c_str());
+
+                        layerNr++;
+                    }
+
+                    sLog.outString("pathfinding done");
+
+                    tempPlayer->RemoveFromWorld();
+                    delete tempPlayer;
+                    delete session;
+            }
+
+            transport->Update(100);
+
+            transport->UpdatePosition(5000, 5000, 0, 0);
+        }
+    }
+
+    sLog.outString("Transport analysis complete.");
+    return true;
+}
+
+bool DebugAction::HandleUpdownspace(Event& event, Player* requester, const std::string& text)
+{
+    float startHeightOffset = 0.0f;
+
+    if (text.length() > std::string("updownspace").size())
+    {
+        startHeightOffset = atof(text.substr(std::string("updownspace").size() + 1).c_str());
+    }
+
+    float botX = bot->GetPositionX();
+    float botY = bot->GetPositionY();
+    float botZ = bot->GetPositionZ();
+    float startZ = botZ + startHeightOffset;
+
+    std::ostringstream out;
+    out << "Bot pos: (" << botX << ", " << botY << ", " << botZ << ") offset: " << startHeightOffset << " startZ: " << startZ << "\n";
+
+    float destX_down = botX;
+    float destY_down = botY;
+    float destZ_down = startZ - 50.0f;
+    float vmapDestX_down = botX, vmapDestY_down = botY, vmapDestZ_down = startZ - 50.0f;
+
+    VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(bot->GetMapId(), botX, botY, startZ, destX_down, destY_down, destZ_down, vmapDestX_down, vmapDestY_down, vmapDestZ_down, 0);
+    bool vmapHitDown = (vmapDestX_down != botX || vmapDestY_down != botY || fabs(vmapDestZ_down - (startZ - 50.0f)) > 0.1f);
+
+#ifndef MANGOSBOT_TWO
+    bool combinedHitDown = bot->GetMap()->GetHitPosition(botX, botY, startZ, destX_down, destY_down, destZ_down, 0);
+#else
+    bool combinedHitDown = bot->GetMap()->GetHitPosition(botX, botY, startZ, destX_down, destY_down, destZ_down, 0, 0);
+#endif
+
+    if (vmapHitDown)
+        out << "VMAP DOWN hit at z: " << vmapDestZ_down << "\n";
+    else
+        out << "VMAP DOWN no hit\n";
+
+    if (combinedHitDown)
+    {
+        bool isDynamic = (destX_down != vmapDestX_down || destY_down != vmapDestY_down || fabs(destZ_down - vmapDestZ_down) > 0.1f);
+        if (isDynamic)
+            out << "OBJECT DOWN hit at z: " << destZ_down << "\n";
+    }
+
+    float destX_up = botX;
+    float destY_up = botY;
+    float destZ_up = startZ + 50.0f;
+    float vmapDestX_up = botX, vmapDestY_up = botY, vmapDestZ_up = startZ + 50.0f;
+
+    VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(bot->GetMapId(), botX, botY, startZ, destX_up, destY_up, destZ_up, vmapDestX_up, vmapDestY_up, vmapDestZ_up, 0);
+    bool vmapHitUp = (vmapDestX_up != botX || vmapDestY_up != botY || fabs(vmapDestZ_up - (startZ + 50.0f)) > 0.1f);
+
+#ifndef MANGOSBOT_TWO
+    bool combinedHitUp = bot->GetMap()->GetHitPosition(botX, botY, startZ, destX_up, destY_up, destZ_up, 0);
+#else
+    bool combinedHitUp = bot->GetMap()->GetHitPosition(botX, botY, startZ, destX_up, destY_up, destZ_up, 0, 0);
+#endif
+
+    if (vmapHitUp)
+        out << "VMAP UP hit at z: " << vmapDestZ_up << "\n";
+    else
+        out << "VMAP UP no hit\n";
+
+    if (combinedHitUp)
+    {
+        bool isDynamic = (destX_up != vmapDestX_up || destY_up != vmapDestY_up || fabs(destZ_up - vmapDestZ_up) > 0.1f);
+        if (isDynamic)
+            out << "OBJECT UP hit at z: " << destZ_up << "\n";
+    }
+
+    ai->TellPlayer(requester, out.str());
+    return true;
+}
+
+bool DebugAction::HandlePatharound(Event& event, Player* requester, const std::string& text)
+{
+    float distance = 20.0f;
+
+    if (text.length() > std::string("patharound").size())
+    {
+        distance = atof(text.substr(std::string("patharound").size() + 1).c_str());
+    }
+
+    WorldPosition botPos(bot);
+    float botX = botPos.getX();
+    float botY = botPos.getY();
+    float botZ = botPos.getZ();
+
+    std::ostringstream out;
+    out << "Patharound: distance = " << distance << " from (" << botX << ", " << botY << ", " << botZ << ")\n";
+
+    uint32 pathCount = 0;
+    uint32 successCount = 0;
+
+    if (bot->GetTransport())
+        botPos.CalculatePassengerOffset(bot->GetTransport());
+
+    for (float angle = 0.0f; angle < 360.0f; angle += 20.0f)
+    {
+        float rad = angle * M_PI / 180.0f;
+
+        WorldPosition target(bot);
+        target += WorldPosition(0, distance * cos(rad), distance * sin(rad));
+
+        if (bot->GetTransport())
+            target.CalculatePassengerOffset(bot->GetTransport());
+
+        PathFinder pathfinder(bot, true);
+        pathfinder.calculate(botPos.getVector3(), target.getVector3(), false);
+
+        if (!(pathfinder.getPathType() & PATHFIND_NORMAL))
+        {
+            continue;
+        }
+
+        std::vector<WorldPosition> path = botPos.fromPointsArray(pathfinder.getPath());
+
+        if (path.size() < 2 || path.front().distance(path[1]) > 10.0f)
+        {
+            continue;
+        }
+
+        bool reachedTarget = false;
+
+        for (size_t i = 0; i < path.size(); ++i)
+        {
+            WorldPosition p = path[i];
+
+            //if (bot->GetTransport())
+            //    p.CalculatePassengerPosition(bot->GetTransport());
+
+            Creature* wpCreature = bot->SummonCreature(2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+
+            ai->AddAura(wpCreature, 246);
+
+            if (i == path.size() - 1)
+            {
+                float finalDist = target.distance(p);
+                if (finalDist < 5.0f)
+                {
+                    reachedTarget = true;
+                    ai->AddAura(wpCreature, 1130);
+                }
+            }
+        }
+
+        pathCount++;
+        if (reachedTarget)
+            successCount++;
+    }
+
+    out << "Path attempts: " << pathCount << ", reached target: " << successCount;
+    ai->TellPlayer(requester, out.str());
+    return true;
+}
+
+bool DebugAction::HandleHeightForLos(Event& event, Player* requester, const std::string& text)
+{
+    Player* master = GetMaster();
+    if (!master)
+    {
+        ai->TellPlayer(requester, "No master found");
+        return true;
+    }
+
+    WorldPosition masterPos(master);
+    WorldPosition botPos(bot);
+
+    std::ostringstream out;
+    out << "Bot: (" << botPos.print() << ")\n";
+    out << "Master: (" << masterPos.print() << ")\n";
+
+    bool initialLos = botPos.IsInLineOfSight(masterPos, 1.5f);
+    out << "Initial LoS (1.5f offset): " << (initialLos ? "YES" : "NO") << "\n";
+
+    if (initialLos)
+    {
+        out << "Already have LoS at offset 1.5f both sides. Total height: 3.0f";
+        ai->TellPlayer(requester, out.str());
+        return true;
+    }
+
+    float heightStep = 0.5f;
+    float maxHeight = 50.0f;
+
+    float bestBotHeight = 0.0f;
+
+    out << "Searching for bot height...\n";
+    for (float botHeight = 0.0f; botHeight <= maxHeight; botHeight += heightStep)
+    {
+        bool los = botPos.IsInLineOfSight(masterPos, botHeight);
+        if (los)
+        {
+            out << "Found LoS with bot +" << botHeight;
+            bestBotHeight = botHeight;
+            break;
+        }
+    }
+
+    if (bestBotHeight == maxHeight)
+    {
+        out << "No LoS found within " << maxHeight << " height range";
+    }
+
+    ai->TellPlayer(requester, out.str());
     return true;
 }

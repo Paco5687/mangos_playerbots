@@ -9,13 +9,10 @@ namespace ai
     {
     public:
         CanMoveAroundValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can move around", 2) {}
-        virtual bool Calculate()
+        virtual bool Calculate() override
         {
             if (bot->GetTradeData())
                 return false;
-
-            //if (ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT))
-            //    return false;
 
             if (!AI_VALUE(bool, "group ready"))
                 return false;
@@ -23,15 +20,31 @@ namespace ai
             if (AI_VALUE2(bool, "trigger active", "castnc"))
                 return false;
 
+            if (ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT))
+            {
+                float dist = AI_VALUE2(float, "distance", "master target");
+                bool wanderTooFar = dist > ai->GetRange("wandermax");
+
+                if (wanderTooFar)
+                    return false;
+            }
+
             return true;
         }
+
+#ifdef GenerateBotHelp
+        virtual std::string GetHelpName() { return "can move around"; } //Must equal iternal name
+        virtual std::string GetHelpTypeName() { return "movement"; }
+        virtual std::string GetHelpDescription() { return "This value indicates whether the bot should wait for a trade to complete, a crafting cast or for the group to have enough health/mana before moving to rpg, grind or travel targets."; }
+        virtual std::vector<std::string> GetUsedValues() { return {"group ready", "trigger active"}; }
+#endif 
     };
 
     class ShouldHomeBindValue : public BoolCalculatedValue
     {
     public:
         ShouldHomeBindValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "should home bind", 2) {}
-        virtual bool Calculate() { return AI_VALUE2(float, "distance", "home bind") > 1000.0f; };
+        virtual bool Calculate() override { return AI_VALUE2(float, "distance", "home bind") > 1000.0f; };
     };
 
 
@@ -39,49 +52,49 @@ namespace ai
 	{
 	public:
         ShouldRepairValue(PlayerbotAI* ai) : BoolCalculatedValue(ai,"should repair",2) {}
-        virtual bool Calculate() { return AI_VALUE(uint8, "durability") < 30 || AI_VALUE(uint8, "lowest durability") < 10; };
+        virtual bool Calculate() override { return AI_VALUE(uint8, "durability") < 30 || AI_VALUE(uint8, "lowest durability") < 10; };
     };
 
     class CanRepairValue : public BoolCalculatedValue
     {
     public:
         CanRepairValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can repair",2) {}
-        virtual bool Calculate() { return  ai->HasStrategy("rpg maintenance", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE(uint8, "durability inventory") < 100 && AI_VALUE(uint32, "min repair cost") < AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::repair); };
+        virtual bool Calculate() override { return  ai->HasStrategy("rpg maintenance", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE(uint8, "durability inventory") < 100 && AI_VALUE(uint32, "min repair cost") < AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::repair); };
     };
 
     class ShouldSellValue : public BoolCalculatedValue
     {
     public:
         ShouldSellValue(PlayerbotAI* ai, std::string name = "should sell", int checkInterval = 2) : BoolCalculatedValue(ai, name , checkInterval) {}
-        virtual bool Calculate() { return AI_VALUE(uint8, "bag space") > 80; };
+        virtual bool Calculate() override { return AI_VALUE(uint8, "bag space") > 80; };
     };
 
     class CanSellValue : public BoolCalculatedValue
     {
     public:
         CanSellValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can sell",2) {}
-        virtual bool Calculate() { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE2(uint32, "item count", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_VENDOR)) > 0; };
+        virtual bool Calculate() override { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE2(uint32, "item count", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_VENDOR)) > 0; };
     };
 
     class CanBuyValue : public BoolCalculatedValue
     {
     public:
         CanBuyValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can buy", 2) {}
-        virtual bool Calculate() { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && !AI_VALUE(bool, "should repair") && AI_VALUE(uint8, "bag space") < 90 && !AI_VALUE(bool, "can get mail") && (AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ammo) || AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::consumables) || AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::gear) || AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::tradeskill)); };
+        virtual bool Calculate() override { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && !AI_VALUE(bool, "should repair") && AI_VALUE(uint8, "bag space") < 90 && !AI_VALUE(bool, "can get mail") && (AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ammo) || AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::consumables) || AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::gear) || AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::tradeskill)); };
     };
 
     class ShouldAHSellValue : public ShouldSellValue
     {
     public:
         ShouldAHSellValue(PlayerbotAI* ai) : ShouldSellValue(ai, "should ah sell", 2) {}
-        virtual bool Calculate();
+        virtual bool Calculate() override;
     };
 
     class CanAHSellValue : public BoolCalculatedValue
     {
     public:
         CanAHSellValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can ah sell", 2) {}
-        virtual bool Calculate() { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE2(uint32, "item count", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH)) > 1 && AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah) > GetAuctionDeposit(); };
+        virtual bool Calculate() override { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE2(uint32, "item count", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH)) > 1 && AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah) > GetAuctionDeposit(); };
 
         uint32 GetAuctionDeposit()
         {
@@ -102,7 +115,7 @@ namespace ai
     {
     public:
         CanAHBuyValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can ah buy", 2) {}
-        virtual bool Calculate() { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && !AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "should sell") && !AI_VALUE(bool, "can get mail") && AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah) > 0; };
+        virtual bool Calculate() override { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && !AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "should sell") && !AI_VALUE(bool, "can get mail") && AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah) > 0; };
     };
 
 
@@ -110,42 +123,42 @@ namespace ai
     {
     public:
         CanGetMailValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can get mail", 2) {}
-        virtual bool Calculate();
+        virtual bool Calculate() override;
     };
 
     class ShouldGetMailValue : public BoolCalculatedValue
     {
     public:
         ShouldGetMailValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "should get mail", 60) {}
-        virtual bool Calculate();
+        virtual bool Calculate() override;
     };
 
     class CanFightEqualValue: public BoolCalculatedValue
     {
     public:
         CanFightEqualValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can fight equal",2) {}
-        virtual bool Calculate() { return AI_VALUE(uint8, "durability") > 20 && !ai->HasAura(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS,bot); };
+        virtual bool Calculate() override { return AI_VALUE(uint8, "durability") > 20 && !ai->HasAura(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS,bot); };
     };
 
     class CanFightEliteValue : public BoolCalculatedValue
     {
     public:
-        CanFightEliteValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can fight elite") {}
-        virtual bool Calculate() { return bot->GetGroup() && AI_VALUE2(bool, "group and", "can fight equal") && AI_VALUE2(bool, "group and", "following party") && !AI_VALUE2(bool, "group or", "should sell,can sell"); };
+        CanFightEliteValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can fight elite", 2) {}
+        virtual bool Calculate() override { return bot->GetGroup() && AI_VALUE2(bool, "group and", "can fight equal") && AI_VALUE2(bool, "group and", "following party") && !AI_VALUE2(bool, "group or", "should sell,can sell"); };
     };
 
     class CanFightBossValue : public BoolCalculatedValue
     {
     public:
-        CanFightBossValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can fight boss") {}
-        virtual bool Calculate() { return bot->GetGroup() && bot->GetGroup()->GetMembersCount() > 3 && AI_VALUE2(bool, "group and", "can fight equal") && AI_VALUE2(bool, "group and", "following party") && !AI_VALUE2(bool, "group or", "should sell,can sell"); };
+        CanFightBossValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can fight boss", 2) {}
+        virtual bool Calculate() override { return bot->GetGroup() && bot->GetGroup()->GetMembersCount() > 3 && AI_VALUE2(bool, "group and", "can fight equal") && AI_VALUE2(bool, "group and", "following party") && !AI_VALUE2(bool, "group or", "should sell,can sell"); };
     };        
 
     class ShouldDrinkValue : public BoolCalculatedValue
     {
     public:
         ShouldDrinkValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "should drink", 2) {}
-        virtual bool Calculate()
+        virtual bool Calculate() override
         {
             if (!bot->HasMana())
                 return false;
@@ -160,7 +173,8 @@ namespace ai
             if (!bot->GetGroup())
                 return true;
 
-            if (!ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+            if (!(ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+                ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)))
                 return true;
 
             if (!bot->IsWithinDist(master, sPlayerbotAIConfig.EatDrinkMaxDistance))
@@ -186,7 +200,7 @@ namespace ai
     {
     public:
         ShouldEatValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "should eat", 2) {}
-        virtual bool Calculate()
+        virtual bool Calculate() override
         {
             if (AI_VALUE2(uint8, "health", "self target") >= sPlayerbotAIConfig.lowHealth)
                 return false;
@@ -198,7 +212,8 @@ namespace ai
             if (!bot->GetGroup())
                 return true;
 
-            if (!ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+            if (!(ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+                ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)))
                 return true;
 
             if (!bot->IsWithinDist(master, sPlayerbotAIConfig.EatDrinkMaxDistance))
@@ -238,7 +253,8 @@ namespace ai
             if (!bot->GetGroup())
                 return drinkDuration;
 
-            if (!ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+            if (!(ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+                ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)))
                 return drinkDuration;
 
             float minDistance = sPlayerbotAIConfig.followDistance;
@@ -282,7 +298,8 @@ namespace ai
             if (!bot->GetGroup())
                 return eatDuration;
 
-            if (!ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+            if (!(ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+                ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)))
                 return eatDuration;
 
             float minDistance = sPlayerbotAIConfig.followDistance;

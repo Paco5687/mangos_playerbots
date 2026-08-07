@@ -16,8 +16,16 @@ void DungeonStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         NextAction::array(0, new NextAction("enable molten core strategy", 100.0f), NULL)));
 
     triggers.push_back(new TriggerNode(
+        "enter blackwing lair",
+        NextAction::array(0, new NextAction("enable blackwing lair strategy", 100.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
         "enter karazhan",
         NextAction::array(0, new NextAction("enable karazhan strategy", 100.0f), NULL)));
+    
+    triggers.push_back(new TriggerNode(
+        "enter mechanar",
+        NextAction::array(0, new NextAction("enable mechanar strategy", 100.0f), NULL)));
 }
 
 void DungeonStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -39,10 +47,26 @@ void DungeonStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
         NextAction::array(0, new NextAction("disable molten core strategy", 100.0f), NULL)));
 
     triggers.push_back(new TriggerNode(
+        "enter blackwing lair",
+        NextAction::array(0, new NextAction("enable blackwing lair strategy", 100.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "leave blackwing lair",
+        NextAction::array(0, new NextAction("disable blackwing lair strategy", 100.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
         "enter karazhan",
         NextAction::array(0, new NextAction("enable karazhan strategy", 100.0f), NULL)));
 
     triggers.push_back(new TriggerNode(
         "leave karazhan",
         NextAction::array(0, new NextAction("disable karazhan strategy", 100.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "enter mechanar",
+        NextAction::array(0, new NextAction("enable mechanar strategy", 100.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "leave mechanar",
+        NextAction::array(0, new NextAction("disable mechanar strategy", 100.0f), NULL)));
 }

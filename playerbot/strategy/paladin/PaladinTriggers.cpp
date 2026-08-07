@@ -12,7 +12,9 @@ bool SealTrigger::IsActive()
         !ai->HasAura("seal of command", target) &&
         !ai->HasAura("seal of vengeance", target) &&
 		!ai->HasAura("seal of righteousness", target) &&
+        !ai->HasAura("seal of the crusader", target) &&
 		!ai->HasAura("seal of light", target) &&
+        !ai->HasAura("seal of blood", target) &&
         !ai->HasAura("seal of wisdom", target) &&
         AI_VALUE2(bool, "combat", "self target");
 }
@@ -70,6 +72,9 @@ bool GreaterBlessingTrigger::IsActive()
     Unit* target = GetTarget();
     if (target)
     {
+        if (!bot->GetMap()->IsDungeon() && !bot->GetMap()->IsBattleGround())
+            return false;
+
         std::vector<std::string> altBlessings;
         std::vector<std::string> haveBlessings;
         altBlessings.push_back("blessing of might");
@@ -154,6 +159,9 @@ bool BlessingOnPartyTrigger::IsActive()
 
 bool GreaterBlessingOnPartyTrigger::IsActive()
 {
+    if (!bot->GetMap()->IsDungeon() && !bot->GetMap()->IsBattleGround())
+        return false;
+
     std::vector<std::string> altBlessings;
     std::vector<std::string> haveBlessings;
     altBlessings.push_back("blessing of might");

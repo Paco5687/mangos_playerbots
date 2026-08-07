@@ -38,6 +38,7 @@ ChatCommandHandlerStrategy::ChatCommandHandlerStrategy(PlayerbotAI* ai) : PassTr
     supported.push_back("share");
     supported.push_back("ll");
     supported.push_back("ss");
+    supported.push_back("avoid creature");
     supported.push_back("release");
     supported.push_back("teleport");
     supported.push_back("taxi");
@@ -72,6 +73,7 @@ ChatCommandHandlerStrategy::ChatCommandHandlerStrategy(PlayerbotAI* ai) : PassTr
     supported.push_back("position");
     supported.push_back("summon");
     supported.push_back("who");
+    supported.push_back("where");
     supported.push_back("save mana");
     supported.push_back("formation");
     supported.push_back("stance");
@@ -164,6 +166,10 @@ void ChatCommandHandlerStrategy::InitReactionTriggers(std::list<TriggerNode*> &t
         NextAction::array(0, new NextAction("equip", relevance), NULL)));
 
     triggers.push_back(new TriggerNode(
+        "equip",
+        NextAction::array(0, new NextAction("equip", relevance), NULL)));
+
+    triggers.push_back(new TriggerNode(
         "ue",
         NextAction::array(0, new NextAction("unequip", relevance), NULL)));
 
@@ -214,6 +220,10 @@ void ChatCommandHandlerStrategy::InitReactionTriggers(std::list<TriggerNode*> &t
     triggers.push_back(new TriggerNode(
         "follow",
         NextAction::array(0, new NextAction("follow chat shortcut", relevance), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "wander",
+        NextAction::array(0, new NextAction("wander chat shortcut", relevance), NULL)));
 
     triggers.push_back(new TriggerNode(
         "stay",

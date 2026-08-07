@@ -9,9 +9,15 @@ namespace ai
         EquipAction(PlayerbotAI* ai, std::string name = "equip") : ChatCommandAction(ai, name) {}
         virtual bool Execute(Event& event) override;
         void EquipItems(Player* requester, ItemIds ids);
-        void EquipItem(Player* requester, Item* item);
+        void EquipItemsToSlot(Player* requester, ItemIds ids, uint8 targetSlot);
+        static void EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool silent = false);
+        void EquipItemToSlot(Player* requester, Item* item, uint8 targetSlot);
         virtual bool isUsefulWhenStunned() override { return true; }
 
+        bool IsEnchantable(Item* item, uint32 spellid);
+        void EnchantItem(Item* item);
+
+        std::vector<EnchantTemplate> enchants;
 #ifdef GenerateBotHelp
         virtual std::string GetHelpName() { return "equip"; }
         virtual std::string GetHelpDescription()
@@ -27,7 +33,7 @@ namespace ai
     private:
         void EquipItem(Player* requester, FindItemVisitor* visitor);
         void ListItems(Player* requester);
-        uint8 GetSmallestBagSlot();
+        static uint8 GetSmallestBagSlot(Player* bot);
     };
 
     class EquipUpgradesAction : public EquipAction

@@ -70,6 +70,15 @@ AiPlayerbot.RandomBotAccountCount = 200
 # (0-1), default 0
 # AiPlayerbot.DisableActivityPriorities = 0
 
+# Force bots to become active when a player is nearby
+#AiPlayerbot.ForceActiveWhenNearPlayer = 0
+
+# Force bots to become active when guild orders are enabled
+#AiPlayerbot.GuildOrderAlwaysActive = 1
+
+# Limit combat activity for slight performance boost.
+#AiPlayerbot.LimitCombatActivity = 0
+
 # Percentage of fully active bots. Default is 10, higher numbers may affect performance
 # AiPlayerbot.botActiveAlone = 10
 
@@ -77,6 +86,10 @@ AiPlayerbot.RandomBotAccountCount = 200
 # AiPlayerbot.SyncLevelWithPlayers = 0
 # AiPlayerbot.SyncLevelMaxAbove = 5
 # AiPlayerbot.SyncLevelNoPlayer = 1
+
+# Sync non-random bot alt levels to master level automatically
+# When enabled, bot alts will level up one level at a time to match their master's level
+# AiPlayerbot.SyncAltLevelToMaster = 0
 
 # Random bot guild count
 AiPlayerbot.RandomBotGuildCount = 20
@@ -135,11 +148,29 @@ AiPlayerbot.RandomGearTabardsUnobtainable = 0
 # List of item IDs to exclude from random gear, separated by comma
 AiPlayerbot.RandomGearBlacklist = 0
 
+# Roll need on items if slot is empty or broken, even if not appropriate for bot's spec
+# Bots without real player master ignore this config and always roll need in that case
+# 1 - roll need on such items
+# 0 - roll greed on such items (Default)
+AiPlayerbot.RollBadItemsWithPlayer = 0
+
 # Chance random bot has max level on first randomize (default 0.15)
 AiPlayerbot.RandomBotMaxLevelChance = 0.15
 
 # Chance bot chooses RPG (Teleport to random camp for their level) instead of grinding
 AiPlayerbot.RandomBotRpgChance = 0.20
+
+# Random bots teleport to zones around real player if level is appropriate
+# AiPlayerbot.RandomBotTeleportNearPlayer = 0
+
+# Limit how many random bots teleport to points in zones around real player
+# AiPlayerbot.RandomBotTeleportNearPlayerMaxAmount = 0
+
+# Limit whithin what distance between other bots they teleport to points in zones around real player
+# AiPlayerbot.RandomBotTeleportNearPlayerMaxAmountRadius = 0
+
+# Bot transport use style: 0 = walk on transports (currently not available), 1 = teleport on transports and ride it, 2 = teleport from dock to dock bypassing transport.
+# AiPlayerbot.TransportTeleportType = 2
 
 # Chance for bot to use potions
 #AiPlayerbot.UsePotionChance = 1.0
@@ -188,6 +219,13 @@ AiPlayerbot.minEnchantingBotLevel = 81
 # Randombots checking players gear score level and deny the group invite if it's too low
 # Default: 1 (enabled)
 AiPlayerbot.GearScoreCheck = 0
+
+# Randombots checking players level difference and deny the group invite if it's too low
+# Default: 30
+# AiPlayerbot.LevelCheck = 30
+
+# Spells that won't affect bots
+# AiPlayerbot.ImmuneSpellIds =
 
 # Quest that will be completed and rewarded to all random bots
 AiPlayerbot.RandomBotQuestIds = 7848,3802,5505,6502,7761
@@ -321,6 +359,10 @@ AiPlayerbot.AutoPickReward = yes
 # Default: 0 (disabled)
 AiPlayerbot.AutoEquipUpgradeLoot = 1
 
+# Bots enchant upgrades automatically
+# Default: 0 (disabled)
+AiPlayerbot.AutoEnchantUpgradeLoot = 0
+
 # Sync quests with player (Bots will complete quests the moment you hand them in. Bots will ignore looting quest items.)
 # Default: 0 (disabled)
 AiPlayerbot.SyncQuestWithPlayer = 0
@@ -346,6 +388,9 @@ AiPlayerbot.AutoLearnDroppedSpells = 0
 # Random Bots will pick quests on their own and try to complete
 # Default: 1 (enabled)
 # AiPlayerbot.AutoDoQuests = 1
+
+# Random Bots will also move to destinations when not seen by the player
+# AiPlayerbot.EnableMinimalMove = 1
 
 ##################################################################################
 #                                                                                #
@@ -863,6 +908,9 @@ AiPlayerbot.FleeingEnabled = 1
 #AiPlayerbot.ReactStrategies = 
 #AiPlayerbot.DeadStrategies = 
 
+# Toggle offheal and offdps strategies for hybrid classes.
+#AiPlayerbot.EnableOffSpecStrategies = 1
+
 # Quest items to leave (do not destroy)
 #AiPlayerbot.RandomBotQuestItems = 6948,5175,5176,5177,5178,16309,12382,13704,11000
 
@@ -881,15 +929,14 @@ AiPlayerbot.FleeingEnabled = 1
 #AiPlayerbot.OpenGoSpell = 6477
 
 # Intervals
-AiPlayerbot.RandomBotUpdateInterval = 60
+#AiPlayerbot.RandomBotUpdateInterval = 1000
+#AiPlayerbot.RandomBotsMaxLoginsPerInterval = 10
 AiPlayerbot.RandomBotCountChangeMinInterval = 1800
 AiPlayerbot.RandomBotCountChangeMaxInterval = 7200
 #AiPlayerbot.MinRandomBotInWorldTime = 3600
 #AiPlayerbot.MaxRandomBotInWorldTime = 1209600
 #AiPlayerbot.MinRandomBotRandomizeTime = 7200
 #AiPlayerbot.MaxRandomRandomizeTime = 1209600
-#AiPlayerbot.RandomBotsPerInterval = 60
-#AiPlayerbot.RandomBotsMaxLoginsPerInterval = 30
 #AiPlayerbot.MinRandomBotsPriceChangeInterval = 7200
 #AiPlayerbot.MaxRandomBotsPriceChangeInterval = 172800
 
@@ -922,6 +969,12 @@ AiPlayerbot.RandomBotCountChangeMaxInterval = 7200
 # How far random bots are teleported after death
 AiPlayerbot.RandomBotTeleportDistance = 100
 
+# Set 'wander' as a default following strategy instead of 'follow' (Bots have freedom to move around while near master)
+#AiPlayerbot.UseWanderAsDefaultFollowStrategy = 1
+
+# Default bot formation
+#AiPlayerbot.DefaultFormation = near
+
 # Debug switches
 #AiPlayerbot.SpellDump = 0
 #AiPlayerbot.LogInGroupOnly = 1
@@ -941,9 +994,6 @@ AiPlayerbot.PerfMonEnabled = 0
 
 # Instant randomize: Force randombots to randomize on initial login.
 # AiPlayerbot.InstantRandomize = 0
-
-# Percentage of (min) bots online that speeds up login speed by 2x.
-# AiPlayerbot.LoginBoostPercentage = 90
 
 # Bot cheats. Same as "/w <bot> cheat (+/-/?) <cheatcode>" but only globally for all bots.
 # Values: taxi            (all nodes learned)
@@ -1035,6 +1085,20 @@ AiPlayerbot.PerfMonEnabled = 0
 # AiPlayerbot.LLMResponseDeletePattern = (\\n|<sender name>:|\\[^ ]+)
 # Step4: What pattern the server should look for to split the repsonse in multiple lines. Note only lines that follow this pattern will be extracted.
 # AiPlayerbot.LLMResponseSplitPattern = (\*.*?\*)|(\[.*?\])|(\'.*\')|([^\*\[\] ][^\*\[\]]+?[.?!])
+
+# The file llm_character_card.txt allows you to define how individual bots speak. You need to create this file in the root folder.
+# Each new line adds an additional prompt to the specified bot, which can be used to adjust specific bot's personality and speaking style.
+# The format must be as follows:
+# name1::text1
+# name2::text2
+# name3::text3
+
+# Examples:
+# Celguar::I am the Keeper of the Source.
+# Mostlikely::I like to travel a lot.
+# Flekz::I hold the power of ancient wizardry.
+
+AiPlayerbot.LLMDefaultPromptsFile = llm_character_card.txt
 
 # Should previous conversations from all channels be mixed?
 # AiPlayerbot.LLMGlobalContext = 0

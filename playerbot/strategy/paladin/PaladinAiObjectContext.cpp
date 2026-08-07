@@ -22,11 +22,20 @@ namespace ai
                 creators["cc"] = [](PlayerbotAI* ai) { return new CcPlaceholderStrategy(ai); };
                 creators["offheal"] = [](PlayerbotAI* ai) { return new OffhealPlaceholderStrategy(ai); };
                 creators["boost"] = [](PlayerbotAI* ai) { return new BoostPlaceholderStrategy(ai); };
+                creators["pull"] = [](PlayerbotAI* ai) {
 #ifdef MANGOSBOT_TWO
-                creators["pull"] = [](PlayerbotAI* ai) { return new PullStrategy(ai, "judgement of light", "seal of righteousness"); };
-#else
-                creators["pull"] = [](PlayerbotAI* ai) { return new PullStrategy(ai, "judgement", "seal of righteousness"); };
+                    return new PullStrategy(ai, "judgement of light", "seal of righteousness");
 #endif
+#ifdef MANGOSBOT_ONE
+                    if (ai->HasSpell(31935))
+                        return new PullStrategy(ai, "avenger's shield", "seal of wisdom"); 
+                    else
+                        return new PullStrategy(ai, "judgement", "seal of righteousness");
+#endif
+#ifdef MANGOSBOT_ZERO
+                    return new PullStrategy(ai, "judgement", "seal of righteousness");      
+#endif
+                };
             }
         };
 
@@ -233,6 +242,7 @@ namespace ai
                 creators["seal"] = [](PlayerbotAI* ai) { return new SealTrigger(ai); };
                 creators["art of war"] = [](PlayerbotAI* ai) { return new ArtOfWarTrigger(ai); };
                 creators["blessing"] = [](PlayerbotAI* ai) { return new BlessingTrigger(ai); };
+                creators["target no judgement"] = [](PlayerbotAI* ai) { return new TargetNoJudgementTrigger(ai); };
                 creators["greater blessing"] = [](PlayerbotAI* ai) { return new GreaterBlessingTrigger(ai); };
                 creators["blessing of might"] = [](PlayerbotAI* ai) { return new BlessingOfMightTrigger(ai); };
                 creators["blessing of wisdom"] = [](PlayerbotAI* ai) { return new BlessingOfWisdomTrigger(ai); };
@@ -303,6 +313,8 @@ namespace ai
             {
                 creators["seal of command"] = [](PlayerbotAI* ai) { return new CastSealOfCommandAction(ai); };
                 creators["seal of vengeance"] = [](PlayerbotAI* ai) { return new CastSealOfVengeanceAction(ai); };
+                creators["seal of blood"] = [](PlayerbotAI* ai) { return new CastSealOfBloodAction(ai); };
+                creators["seal of the crusader"] = [](PlayerbotAI* ai) { return new CastSealOfTheCrusaderAction(ai); };
                 creators["pve blessing"] = [](PlayerbotAI* ai) { return new CastPveBlessingAction(ai); };
                 creators["pve greater blessing"] = [](PlayerbotAI* ai) { return new CastPveGreaterBlessingAction(ai); };
                 creators["pvp blessing"] = [](PlayerbotAI* ai) { return new CastPvpBlessingAction(ai); };
