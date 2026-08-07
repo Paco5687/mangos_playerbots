@@ -21,6 +21,8 @@ std::unique_ptr<PerformanceMonitorOperation> PerformanceMonitor::start(Performan
         return {};
     }
 
+    std::lock_guard<std::mutex> guard(lock);
+
     auto md = mapsData.find(mapId);
 
     if (md == mapsData.end())
@@ -97,6 +99,8 @@ std::string StackString(const std::vector<std::string>& stack, bool fullStack = 
 
 void PerformanceMonitor::PrintStats(bool perTick, bool fullStack, bool showMap)
 {
+    std::lock_guard<std::mutex> guard(lock);
+
     if (mapsData.empty())
         return;
 
@@ -277,6 +281,8 @@ void PerformanceMonitor::PrintStats(bool perTick, bool fullStack, bool showMap)
 
 void PerformanceMonitor::Reset()
 {
+    std::lock_guard<std::mutex> guard(lock);
+
     for (auto& [mapId, mapData] : mapsData)
     {
         for (auto& [instanceId, instanceData] : mapData)
@@ -296,6 +302,7 @@ void PerformanceMonitor::Init(uint32 mapId, uint32 instanceId)
 {    
     if (sPlayerbotAIConfig.perfMonEnabled)
     {
+        std::lock_guard<std::mutex> guard(lock);
         mapsData[mapId][instanceId];
     }
 }                       
@@ -318,19 +325,24 @@ void PerformanceMonitorOperation::finish()
     std::chrono::milliseconds finished = (std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now())).time_since_epoch();
     uint32 elapsed = (finished - started).count();
 
-   // std::lock_guard<std::mutex> guard(data.lock);
-    if (elapsed > 0)
     {
-        if (!data.minTime || data.minTime > elapsed)
-            data.minTime = elapsed;
-        if (!data.maxTime || data.maxTime < elapsed)
-            data.maxTime = elapsed;
-        data.totalTime += elapsed;
+        std::lock_guard<std::mutex> guard(data.lock);
+        if (elapsed > 0)
+        {
+            if (!data.minTime || data.minTime > elapsed)
+                data.minTime = elapsed;
+            if (!data.maxTime || data.maxTime < elapsed)
+                data.maxTime = elapsed;
+            data.totalTime += elapsed;
+        }
+        data.count++;
     }
-    data.count++;
 
     if (stack)
+    {
+        std::lock_guard<std::mutex> guard(sPerformanceMonitor.lock);
         stack->erase(std::remove(stack->begin(), stack->end(), name), stack->end());
+    }
 }
 
 bool ChatHandler::HandlePerfMonCommand(char* args)

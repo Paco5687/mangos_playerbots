@@ -79,10 +79,15 @@ class PerformanceMonitor
         void PrintStats(bool perTick = false,  bool fullStack = false, bool showMap = false);
         void Reset();
         void Init(uint32 mapId, uint32 instanceId);
+    public:
+        // Guards mapsData structure and every PerformanceStack. Bot values are
+        // evaluated concurrently from map-worker threads and the world thread,
+        // so the unordered_map inserts in start() and the stack push/erase in
+        // start()/finish() race without it (double free, see issue reports).
+        std::mutex lock;
     private:
         performanceMetricMap data;
         performanceMapMap mapsData;
-        //std::mutex lock;
 };
 
 
