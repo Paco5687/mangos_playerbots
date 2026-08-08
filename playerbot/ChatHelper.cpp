@@ -314,7 +314,13 @@ std::set<uint32> ChatHelper::ExtractAllItemIds(const std::string& text)
 {
     std::set<uint32> ids;
 
-    std::regex rgx("Hitem:[0-9]+");
+    // early-out and a compile-once regex: this runs for EVERY bot receiving
+    // any channel message — per-call regex construction was O(bots^2) on
+    // world-channel chat and showed up in production hang stacks
+    if (text.find("Hitem:") == std::string::npos)
+        return ids;
+
+    static const std::regex rgx("Hitem:[0-9]+");
     auto begin = std::sregex_iterator(text.begin(), text.end(), rgx);
     auto end = std::sregex_iterator();
     for (std::sregex_iterator i = begin; i != end; ++i)
