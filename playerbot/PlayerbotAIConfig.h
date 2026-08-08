@@ -402,6 +402,7 @@ public:
     bool llmGlobalContext;
     ParsedUrl llmEndPointUrl;
     std::set<uint32> llmBlockedReplyChannels;
+    std::string llmChatLogFile; // JSONL conversation log (empty = off)
     //LM END
 
     uint32 EatDrinkMinDistance = 5;

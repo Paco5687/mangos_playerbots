@@ -35,7 +35,9 @@ namespace ai
         static delayedPackets LinesToPackets(const std::vector<std::string>& lines, WorldPacket packetTemplate, bool debug = false, uint32 MsPerChar = 0, WorldPacket emoteTemplate = WorldPacket(), uint32 timeDiff = 0);
 
         static delayedPackets GenerateResponsePackets(const std::string json
-            , const WorldPacket chatTemplate, const WorldPacket emoteTemplate, const WorldPacket systemTemplate, const std::string startPattern, const std::string endPattern, const std::string deletePattern, const std::string splitPattern, bool debug = false);
+            , const WorldPacket chatTemplate, const WorldPacket emoteTemplate, const WorldPacket systemTemplate, const std::string startPattern, const std::string endPattern, const std::string deletePattern, const std::string splitPattern, bool debug = false
+            , const std::string logBotName = "", const std::string logOtherName = "", const std::string logChannel = "", uint32 logZoneId = 0, const std::string logHeard = "");
+        static void LogLlmConversation(const std::string& botName, const std::string& otherName, const std::string& channel, uint32 zoneId, const std::string& heard, const std::string& said);
 
         static void ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32 guid2, std::string msg, std::string chanName, std::string name);
         static bool HandleThunderfuryReply(Player* bot, ChatChannelSource chatChannelSource, std::string msg, std::string name);

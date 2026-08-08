@@ -1,4 +1,7 @@
 #include <thread>
+#include <fstream>
+#include <mutex>
+#include <ctime>
 
 #include "playerbot/playerbot.h"
 #include "SayAction.h"
@@ -419,8 +422,55 @@ delayedPackets ChatReplyAction::LinesToPackets(const std::vector<std::string>& l
     return delayedPackets;
 }
 
+// JSON-escape for the conversation log (quotes, backslashes, control chars)
+static std::string EscapeForJsonLog(const std::string& in)
+{
+    std::string out;
+    out.reserve(in.size() + 8);
+    for (unsigned char c : in)
+    {
+        switch (c)
+        {
+        case '"': out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default:
+            if (c < 0x20) { char buf[8]; snprintf(buf, sizeof(buf), "\\u%04x", c); out += buf; }
+            else out += (char)c;
+        }
+    }
+    return out;
+}
+
+void ChatReplyAction::LogLlmConversation(const std::string& botName, const std::string& otherName, const std::string& channel, uint32 zoneId, const std::string& heard, const std::string& said)
+{
+    if (sPlayerbotAIConfig.llmChatLogFile.empty())
+        return;
+
+    static std::mutex logLock;
+    std::lock_guard<std::mutex> guard(logLock);
+
+    std::ofstream log(sPlayerbotAIConfig.llmChatLogFile, std::ios::app);
+    if (!log.is_open())
+        return;
+
+    time_t now = time(nullptr);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", gmtime(&now));
+
+    log << "{\"ts\":\"" << ts << "\",\"bot\":\"" << EscapeForJsonLog(botName)
+        << "\",\"other\":\"" << EscapeForJsonLog(otherName)
+        << "\",\"channel\":\"" << EscapeForJsonLog(channel)
+        << "\",\"zone\":" << zoneId
+        << ",\"heard\":\"" << EscapeForJsonLog(heard)
+        << "\",\"said\":\"" << EscapeForJsonLog(said) << "\"}\n";
+}
+
 delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
-    , const WorldPacket chatTemplate, const WorldPacket emoteTemplate, const WorldPacket systemTemplate, const std::string startPattern, const std::string endPattern, const std::string deletePattern, const std::string splitPattern, bool debug)
+    , const WorldPacket chatTemplate, const WorldPacket emoteTemplate, const WorldPacket systemTemplate, const std::string startPattern, const std::string endPattern, const std::string deletePattern, const std::string splitPattern, bool debug
+    , const std::string logBotName, const std::string logOtherName, const std::string logChannel, uint32 logZoneId, const std::string logHeard)
 {
     std::vector<std::string> debugLines;
 
@@ -435,6 +485,14 @@ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
     auto timeDiff = (timeAfter - startTime) * IN_MILLISECONDS;
 
     std::vector<std::string> lines = PlayerbotLLMInterface::ParseResponse(response, startPattern, endPattern, deletePattern, splitPattern, debugLines);
+
+    if (!logBotName.empty() && !lines.empty())
+    {
+        std::string said;
+        for (const auto& line : lines)
+            said += (said.empty() ? "" : " ") + line;
+        LogLlmConversation(logBotName, logOtherName, logChannel, logZoneId, logHeard, said);
+    }
 
     delayedPackets packets, debugPackets;
 
@@ -655,9 +713,13 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                 // it deposits packets into a guid-keyed mailbox the bot drains
                 // from its own update thread (see PlayerbotAI::DrainLlmReplies)
                 ObjectGuid botGuid = bot->GetObjectGuid();
-                std::thread([json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug, botGuid]() {
+                std::string logBotName = bot->GetName();
+                std::string logOtherName = playerName;
+                std::string logChannel = sourceName[chatChannelSource];
+                uint32 logZoneId = bot->GetZoneId();
+                std::thread([json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug, botGuid, logBotName, logOtherName, logChannel, logZoneId, msg]() {
                     PlayerbotAI::DepositLlmReplies(botGuid,
-                        ChatReplyAction::GenerateResponsePackets(json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug));
+                        ChatReplyAction::GenerateResponsePackets(json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug, logBotName, logOtherName, logChannel, logZoneId, msg));
                 }).detach();
             }
             else if (player != bot || sPlayerbotAIConfig.llmBotToBotChatChance)

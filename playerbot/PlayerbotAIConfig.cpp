@@ -743,6 +743,8 @@ bool PlayerbotAIConfig::Initialize()
     for (auto& channelName : blockedChannels)
         llmBlockedReplyChannels.insert(sourceName[channelName]);
 
+    llmChatLogFile = config.GetStringDefault("AiPlayerbot.LLMChatLogFile", "");
+
     {
         std::string promptsFile = config.GetStringDefault("AiPlayerbot.LLMDefaultPromptsFile", "llm_character_card");
         LoadLLMDefaultPrompts(promptsFile);
