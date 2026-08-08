@@ -80,5 +80,10 @@ void PlayerbotDbStore::Reset(PlayerbotAI *ai, std::string preset)
 
 void PlayerbotDbStore::SaveValue(uint64 guid, std::string preset, std::string key, std::string value)
 {
+    // values include free text (e.g. llmdefaultprompt character cards) — an
+    // unescaped quote broke the INSERT and silently lost the whole save
+    CharacterDatabase.escape_string(preset);
+    CharacterDatabase.escape_string(key);
+    CharacterDatabase.escape_string(value);
     CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%lu', '%s', '%s', '%s')", guid, preset.c_str(), key.c_str(), value.c_str());
 }
