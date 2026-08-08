@@ -546,7 +546,9 @@ bool RpgAIChatAction::RequestNewLines()
         emoteTemplate = ChatReplyAction::GetPacketTemplate(SMSG_CHAT_RESTRICTED, CHAT_MSG_MONSTER_EMOTE, unit, bot);
     }
 
-    futPackets = std::async(std::launch::async, ChatReplyAction::GenerateResponsePackets, json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug);
+    futPackets = std::async(std::launch::async, [json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug]() {
+        return ChatReplyAction::GenerateResponsePackets(json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug);
+    });
 
     if (!urand(0, 10))
         chatLine += urand(-2, 2) * 2;
