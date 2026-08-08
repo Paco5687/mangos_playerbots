@@ -3,6 +3,7 @@
 #include "TrainerAction.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/BudgetValues.h"
+#include "playerbot/strategy/values/TrainerValues.h"
 
 using namespace ai;
 
@@ -96,6 +97,15 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
         const SpellEntry *const pSpellInfo =  sServerFacade.LookupSpellInfo(spellId);
         if (!pSpellInfo)
             continue;
+
+        // profession steering: don't learn primaries outside the assignment
+#ifdef MANGOSBOT_ZERO
+        if (!IsTradeSkillAllowedForBot(bot, tSpell->learnedSpell))
+            continue;
+#else
+        if (!tSpell->learnedSpell.empty() && !IsTradeSkillAllowedForBot(bot, tSpell->learnedSpell[0]))
+            continue;
+#endif
 
 #ifdef MANGOSBOT_ZERO
         if (tSpell->learnedSpell)

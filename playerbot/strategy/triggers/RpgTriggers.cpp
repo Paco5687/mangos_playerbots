@@ -6,6 +6,7 @@
 #include "Social/SocialMgr.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
+#include "playerbot/strategy/values/TrainerValues.h"
 #include "playerbot/TravelMgr.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 
@@ -351,6 +352,15 @@ bool RpgTrainTrigger::IsActive()
         if (!pSpellInfo)
             continue;
 
+        // profession steering (see TrainerValues::IsTradeSkillAllowedForBot)
+#ifdef MANGOSBOT_ZERO
+        if (!IsTradeSkillAllowedForBot(bot, tSpell->learnedSpell))
+            continue;
+#else
+        if (!tSpell->learnedSpell.empty() && !IsTradeSkillAllowedForBot(bot, tSpell->learnedSpell[0]))
+            continue;
+#endif
+
 #ifdef MANGOSBOT_ZERO
         if (tSpell->learnedSpell)
         {
@@ -429,7 +439,10 @@ bool RpgTrainTrigger::IsActive()
             budgetType = NeedMoneyFor::mount;
             break;
         case TRAINER_TYPE_TRADESKILLS:
-            budgetType = NeedMoneyFor::skilltraining;
+            // TrainerAction::Learn pays from the 'spells' budget; gating here
+            // on 'skilltraining' (which sits below every reserve) meant broke
+            // low-level bots never triggered training at all
+            budgetType = NeedMoneyFor::spells;
             break;
         default:
             budgetType = NeedMoneyFor::anything;

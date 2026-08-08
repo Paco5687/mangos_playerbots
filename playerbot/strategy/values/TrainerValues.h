@@ -3,6 +3,12 @@
 
 namespace ai
 {
+    // Per-bot profession steering: when the random-bot event values
+    // firstSkill/secondSkill are set, rank-1 primary-profession spells
+    // outside the assignment are not trainable (and the sub-10 block is
+    // waived for assigned ones). Unassigned bots keep vanilla behavior.
+    bool IsTradeSkillAllowedForBot(Player* bot, uint32 learnedSpellId);
+
     // trainableSpellMap[TrainerType][required class/race/skill][TrainerSpell] = {trainer entry};
     typedef std::unordered_map<TrainerSpell const*, std::vector<int32>>  spellTrainerMap;
     typedef std::unordered_map<uint32, spellTrainerMap>          trainableSpellList;

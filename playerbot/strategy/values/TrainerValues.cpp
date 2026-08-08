@@ -3,8 +3,26 @@
 #include "TrainerValues.h"
 #include "SharedValueContext.h"
 #include "playerbot/PlayerbotHelpMgr.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 
 using namespace ai;
+
+bool ai::IsTradeSkillAllowedForBot(Player* bot, uint32 learnedSpellId)
+{
+    if (!learnedSpellId || !SpellMgr::IsPrimaryProfessionSpell(learnedSpellId))
+        return true;   // secondary skills and class spells are unrestricted
+
+    uint32 firstSkill = sRandomPlayerbotMgr.GetValue(bot, "firstSkill");
+    uint32 secondSkill = sRandomPlayerbotMgr.GetValue(bot, "secondSkill");
+    if (!firstSkill && !secondSkill)
+        return true;   // unassigned bots keep vanilla behavior
+
+    SpellLearnSkillNode const* node = sSpellMgr.GetSpellLearnSkill(learnedSpellId);
+    if (!node)
+        return true;
+
+    return node->skill == firstSkill || node->skill == secondSkill;
+}
 
 
 trainableSpellMap* TrainableSpellMapValue::Calculate()
@@ -137,12 +155,22 @@ std::vector<TrainerSpell const*> TrainableSpellsValue::Calculate()
                 if (state != TRAINER_SPELL_GREEN)
                     continue;
 
-                //Skip initial profession training.
 #ifdef MANGOSBOT_ZERO
-                if (bot->GetLevel() < 10 && sSpellMgr.IsProfessionSpell(trainerSpell->learnedSpell) && sSpellMgr.GetSpellRank(trainerSpell->learnedSpell) == 1)
+                uint32 learnedId = trainerSpell->learnedSpell;
 #else
-                if (bot->GetLevel() < 10 && sSpellMgr.IsProfessionSpell(trainerSpell->learnedSpell[0]) && sSpellMgr.GetSpellRank(trainerSpell->learnedSpell[0]) == 1)
+                uint32 learnedId = trainerSpell->learnedSpell[0];
 #endif
+                // Profession steering: assigned bots may train their two
+                // trades at any level; everything outside the assignment
+                // is off the menu. Unassigned bots keep the vanilla
+                // skip-initial-professions-below-10 behavior.
+                bool assigned = sRandomPlayerbotMgr.GetValue(bot, "firstSkill") || sRandomPlayerbotMgr.GetValue(bot, "secondSkill");
+                if (assigned)
+                {
+                    if (!IsTradeSkillAllowedForBot(bot, learnedId))
+                        continue;
+                }
+                else if (bot->GetLevel() < 10 && sSpellMgr.IsProfessionSpell(learnedId) && sSpellMgr.GetSpellRank(learnedId) == 1)
                     continue;
 
                 trainableSpells.push_back(trainerSpell);
