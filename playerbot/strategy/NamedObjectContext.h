@@ -5,6 +5,8 @@
 #include <set>
 #include <list>
 #include <map>
+#include <mutex>
+#include <vector>
 
 namespace ai
 {
@@ -200,6 +202,7 @@ namespace ai
 
         T* Create(std::string name, PlayerbotAI* ai)
         {
+            std::lock_guard<std::mutex> guard(createdLock);
             if (created.find(name) == created.end())
                 return created[name] = NamedObjectFactory<T>::Create(name, ai);
 
@@ -213,6 +216,7 @@ namespace ai
 
         void Clear()
         {
+            std::lock_guard<std::mutex> guard(createdLock);
             for (typename std::map<std::string, T*>::iterator i = created.begin(); i != created.end(); i++)
             {
                 if (i->second)
@@ -224,6 +228,7 @@ namespace ai
 
         void Erase(const std::string& name)
         {
+            std::lock_guard<std::mutex> guard(createdLock);
             if (created.find(name) != created.end())
             {
                 delete created[name];
@@ -233,29 +238,44 @@ namespace ai
 
         void Update()
         {
-            for (typename std::map<std::string, T*>::iterator i = created.begin(); i != created.end(); i++)
+            // snapshot under lock, call outside it: value callbacks may
+            // re-enter Create() and std::mutex is not recursive
+            std::vector<T*> snapshot;
             {
-                if (i->second)
-                    i->second->Update();
+                std::lock_guard<std::mutex> guard(createdLock);
+                for (typename std::map<std::string, T*>::iterator i = created.begin(); i != created.end(); i++)
+                    if (i->second)
+                        snapshot.push_back(i->second);
             }
+            for (T* obj : snapshot)
+                obj->Update();
         }
 
         void Reset()
         {
-            for (typename std::map<std::string, T*>::iterator i = created.begin(); i != created.end(); i++)
+            std::vector<T*> snapshot;
             {
-                if (i->second)
-                    i->second->Reset();
+                std::lock_guard<std::mutex> guard(createdLock);
+                for (typename std::map<std::string, T*>::iterator i = created.begin(); i != created.end(); i++)
+                    if (i->second)
+                        snapshot.push_back(i->second);
             }
+            for (T* obj : snapshot)
+                obj->Reset();
         }
 
         bool IsShared() { return shared; }
         bool IsSupportsSiblings() { return supportsSiblings; }
 
-        bool IsCreated(const std::string& name) { return created.find(name) != created.end(); }
+        bool IsCreated(const std::string& name)
+        {
+            std::lock_guard<std::mutex> guard(createdLock);
+            return created.find(name) != created.end();
+        }
 
         std::set<std::string> GetCreated()
         {
+            std::lock_guard<std::mutex> guard(createdLock);
             std::set<std::string> keys;
             for (typename std::map<std::string, T*>::iterator it = created.begin(); it != created.end(); it++)
                 keys.insert(it->first);
@@ -264,6 +284,7 @@ namespace ai
 
     protected:
         std::map<std::string, T*> created;
+        mutable std::mutex createdLock;
         bool shared;
         bool supportsSiblings;
     };
