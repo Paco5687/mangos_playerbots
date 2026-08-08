@@ -10,6 +10,7 @@
 #include "BotState.h"
 #include "PlayerTalentSpec.h"
 #include <stack>
+#include <atomic>
 #include "strategy/IterateItemsMask.h"
 #include "RandomPlayerbotMgr.h"
 
@@ -619,6 +620,10 @@ public:
     void SetMaster(Player* master) { this->master = master; }
     AiObjectContext* GetAiObjectContext() { return aiObjectContext; }
     void SetAiObjectContext(AiObjectContext* aiObjectContext) { this->aiObjectContext = aiObjectContext; }
+    // Ask the bot to clear expired values on its own update thread. The value
+    // map is not thread-safe; erasing from the world thread while map-worker
+    // threads run the bot's AI corrupts it (observed rbtree crash at scale).
+    void RequestExpiredValueCleanup() { m_clearExpiredValuesRequested.store(true, std::memory_order_relaxed); }
     ChatHelper* GetChatHelper() { return &chatHelper; }
     bool IsOpposing(Player* player);
     static bool IsOpposing(uint8 race1, uint8 race2);
@@ -694,6 +699,7 @@ protected:
 	Player* bot;
 	Player* master;
 	uint32 accountId;
+    std::atomic<bool> m_clearExpiredValuesRequested{false};
     AiObjectContext* aiObjectContext;
     Engine* currentEngine;
     ReactionEngine* reactionEngine;

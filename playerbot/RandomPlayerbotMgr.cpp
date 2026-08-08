@@ -2251,9 +2251,10 @@ bool RandomPlayerbotMgr::ProcessBot(uint32 bot)
     //Update the bot
     if (!update)
     {
-        //Clean up expired values
+        //Clean up expired values — deferred to the bot's own update thread;
+        //erasing here (world thread) races map-worker AI and corrupts the map
         if (ai && !ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
-            ai->GetAiObjectContext()->ClearExpiredValues();
+            ai->RequestExpiredValueCleanup();
 
         //Randomize/teleport bot
         if (!sPlayerbotAIConfig.disableRandomLevels)

@@ -1132,6 +1132,11 @@ void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
     if (bot->IsBeingTeleported() || !bot->IsInWorld())
         return;
 
+    // deferred from RandomPlayerbotMgr (world thread): the value map may only
+    // be mutated here, on the thread that runs this bot's AI
+    if (m_clearExpiredValuesRequested.exchange(false, std::memory_order_relaxed) && aiObjectContext)
+        aiObjectContext->ClearExpiredValues();
+
     std::string mapString = WorldPosition(bot).isInstance() ? "I" : std::to_string(bot->GetMapId());
     auto pmo = sPerformanceMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAIInternal " + mapString, nullptr, bot->GetMapId(), bot->GetInstanceId());
 
