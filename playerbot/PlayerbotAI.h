@@ -548,6 +548,11 @@ public:
     std::list<Unit*> GetAllHostileNPCNonPetUnitsAroundWO(WorldObject* wo, float distanceAround);
 
     static void SendDelayedPacket(WorldSession* session, std::future<std::vector<std::pair<WorldPacket, uint32>>> futurePacket);
+    // Safe LLM reply delivery: background workers deposit finished reply
+    // packets here by bot guid; the bot drains its own mailbox from its own
+    // update thread (no raw WorldSession capture, no dangling on logout).
+    static void DepositLlmReplies(ObjectGuid botGuid, std::vector<std::pair<WorldPacket, uint32>> packets);
+    void DrainLlmReplies();
     void ReceiveDelayedPacket(std::future<std::vector<std::pair<WorldPacket, uint32>>> futurePacket);
  public:
     std::vector<Bag*> GetEquippedAnyBags();

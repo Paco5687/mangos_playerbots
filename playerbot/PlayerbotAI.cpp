@@ -15,6 +15,8 @@
 #include "strategy/actions/EmoteAction.h"
 #include "strategy/values/LastSpellCastValue.h"
 #include "LootObjectStack.h"
+#include <deque>
+#include <mutex>
 #include "playerbot/PlayerbotAIConfig.h"
 #include "PlayerbotAI.h"
 #include "playerbot/PlayerbotFactory.h"
@@ -1136,6 +1138,9 @@ void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
     // be mutated here, on the thread that runs this bot's AI
     if (m_clearExpiredValuesRequested.exchange(false, std::memory_order_relaxed) && aiObjectContext)
         aiObjectContext->ClearExpiredValues();
+
+    // deliver any finished LLM chat replies on our own thread (safe path)
+    DrainLlmReplies();
 
     std::string mapString = WorldPosition(bot).isInstance() ? "I" : std::to_string(bot->GetMapId());
     auto pmo = sPerformanceMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAIInternal " + mapString, nullptr, bot->GetMapId(), bot->GetInstanceId());
@@ -7825,6 +7830,42 @@ void PlayerbotAI::SendDelayedPacket(WorldSession* session, futurePackets futPack
     });
 
     t.detach();
+}
+
+// ---- safe LLM reply delivery (mailbox keyed by bot guid) ----
+static std::mutex s_llmMailboxMutex;
+static std::map<ObjectGuid, std::deque<std::pair<WorldPacket, uint32>>> s_llmMailbox;
+
+void PlayerbotAI::DepositLlmReplies(ObjectGuid botGuid, std::vector<std::pair<WorldPacket, uint32>> packets)
+{
+    if (packets.empty())
+        return;
+    std::lock_guard<std::mutex> guard(s_llmMailboxMutex);
+    auto& box = s_llmMailbox[botGuid];
+    for (auto& p : packets)
+        box.push_back(std::move(p));
+    // bound total mailbox size against pile-up from long-gone bots
+    if (s_llmMailbox.size() > 256)
+        s_llmMailbox.erase(s_llmMailbox.begin());
+}
+
+void PlayerbotAI::DrainLlmReplies()
+{
+    // one packet per update = naturally paced "typing"; runs on the bot's
+    // own update thread, so the session is valid by construction
+    std::pair<WorldPacket, uint32> next;
+    {
+        std::lock_guard<std::mutex> guard(s_llmMailboxMutex);
+        auto it = s_llmMailbox.find(bot->GetObjectGuid());
+        if (it == s_llmMailbox.end() || it->second.empty())
+            return;
+        next = std::move(it->second.front());
+        it->second.pop_front();
+        if (it->second.empty())
+            s_llmMailbox.erase(it);
+    }
+    std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(next.first));
+    bot->GetSession()->QueuePacket(std::move(packetPtr));
 }
 
 void PlayerbotAI::ReceiveDelayedPacket(futurePackets futPackets)

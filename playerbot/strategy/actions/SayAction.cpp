@@ -1,3 +1,4 @@
+#include <thread>
 
 #include "playerbot/playerbot.h"
 #include "SayAction.h"
@@ -650,9 +651,14 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                 WorldPacket emoteTemplate = (type == CHAT_MSG_SAY || type == CHAT_MSG_WHISPER) ? GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_EMOTE, bot, player) : WorldPacket();
                 WorldPacket systemTemplate = GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_WHISPER, bot, player);
 
-                futurePackets futPackets = std::async(std::launch::async, ChatReplyAction::GenerateResponsePackets, json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug);
-
-                ai->SendDelayedPacket(session, std::move(futPackets));
+                // safe delivery: the worker thread never touches the session —
+                // it deposits packets into a guid-keyed mailbox the bot drains
+                // from its own update thread (see PlayerbotAI::DrainLlmReplies)
+                ObjectGuid botGuid = bot->GetObjectGuid();
+                std::thread([json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug, botGuid]() {
+                    PlayerbotAI::DepositLlmReplies(botGuid,
+                        ChatReplyAction::GenerateResponsePackets(json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug));
+                }).detach();
             }
             else if (player != bot || sPlayerbotAIConfig.llmBotToBotChatChance)
             {
