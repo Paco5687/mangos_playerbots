@@ -20,11 +20,11 @@ void PlayerbotDbStore::Load(PlayerbotAI *ai, std::string preset)
     auto results = CharacterDatabase.PQuery("SELECT `key`,`value` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' AND `preset` = '%s'", guid, preset.c_str());
     if (results)
     {
-        ai->ClearStrategies(BotState::BOT_STATE_COMBAT);
-        ai->ClearStrategies(BotState::BOT_STATE_NON_COMBAT);
-        ai->ChangeStrategy("+chat", BotState::BOT_STATE_COMBAT);
-        ai->ChangeStrategy("+chat", BotState::BOT_STATE_NON_COMBAT);
-
+        // Stored strategy lists are applied on top of the AiFactory defaults
+        // instead of replacing them. Clearing here wiped grind/quest/rpg from
+        // account-owned world bots on every login (HasPlayerRelation() is true
+        // for them, so this runs at each ResetStrategies) as soon as any row
+        // existed for the guid — e.g. an llmdefaultprompt character card.
         std::list<std::string> values;
         do
         {
