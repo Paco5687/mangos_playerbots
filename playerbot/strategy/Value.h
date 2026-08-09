@@ -1,4 +1,5 @@
 #pragma once
+#include <mutex>
 #include "Action.h"
 #include "Event.h"
 #include "playerbot/PlayerbotAIAware.h"
@@ -58,6 +59,13 @@ namespace ai
     public:
         virtual T Get() override
         {
+            // Value objects are reached from more than one thread: shared-context
+            // values from every map worker, per-bot values cross-bot via
+            // shareTargets and from world-thread packet handling. An unguarded
+            // 'value = Calculate()' let two threads move-assign the same member
+            // concurrently (2026-08-08 23:23 core: UAF in list::clear under
+            // AttackersValue). Recursive: Calculate() chains may re-enter.
+            std::lock_guard<std::recursive_mutex> guard(valueLock);
             time_t now = time(0);
             if (!lastCheckTime || (checkInterval < 2 && (now - lastCheckTime > 0.1)) || now - lastCheckTime >= checkInterval / 2)
             {
@@ -70,13 +78,14 @@ namespace ai
         }
         virtual T LazyGet() override
         {
+            std::lock_guard<std::recursive_mutex> guard(valueLock);
             if (!lastCheckTime)
                 return Get();
             return value;
         }
-        virtual void Set(T value) override { this->value = value; }
+        virtual void Set(T value) override { std::lock_guard<std::recursive_mutex> guard(valueLock); this->value = value; }
         virtual void Update() { }
-        virtual void Reset() override { lastCheckTime = 0; }
+        virtual void Reset() override { std::lock_guard<std::recursive_mutex> guard(valueLock); lastCheckTime = 0; }
         virtual bool Expired() override { return Expired(checkInterval / 2); }
         virtual bool Expired(uint32 interval) override { return time(0) - lastCheckTime >= interval; }
     protected:
@@ -86,6 +95,7 @@ namespace ai
         int checkInterval;
         time_t lastCheckTime;
         T value;
+        mutable std::recursive_mutex valueLock;
     };
 
     template <class T> class SingleCalculatedValue : public CalculatedValue<T>
@@ -95,6 +105,7 @@ namespace ai
 
         virtual T Get() override
         {
+            std::lock_guard<std::recursive_mutex> guard(this->valueLock);
             time_t now = time(0);
             if (!this->lastCheckTime)
             {
@@ -115,8 +126,8 @@ namespace ai
         virtual bool CanCheckChange() { return !lastChangeTime || (time(0) - lastChangeTime > minChangeInterval && !EqualToLast(this->value)); }
         virtual bool UpdateChange() { if (!CanCheckChange()) return false; lastChangeTime = time(0); lastValue = this->value; return true; }
 
-        virtual void Set(T value) override { CalculatedValue<T>::Set(value); UpdateChange(); }
-        virtual T Get() override { this->value = CalculatedValue<T>::Get(); UpdateChange(); return this->value; }
+        virtual void Set(T value) override { std::lock_guard<std::recursive_mutex> guard(this->valueLock); CalculatedValue<T>::Set(value); UpdateChange(); }
+        virtual T Get() override { std::lock_guard<std::recursive_mutex> guard(this->valueLock); this->value = CalculatedValue<T>::Get(); UpdateChange(); return this->value; }
 
         time_t LastChangeOn() { Get(); return lastChangeTime; }
         uint32 LastChangeDelay() override { return time(0) - LastChangeOn(); }
@@ -310,15 +321,16 @@ namespace ai
         virtual ~ManualSetValue() {}
 
     public:
-        virtual T Get() override { return value; }
+        virtual T Get() override { std::lock_guard<std::recursive_mutex> guard(valueLock); return value; }
         virtual T LazyGet() override { return value; }
-        virtual void Set(T value) override { this->value = value; }
+        virtual void Set(T value) override { std::lock_guard<std::recursive_mutex> guard(valueLock); this->value = value; }
         virtual void Update() { }
-        virtual void Reset() override { value = defaultValue; }
+        virtual void Reset() override { std::lock_guard<std::recursive_mutex> guard(valueLock); value = defaultValue; }
 
     protected:
         T value;
         T defaultValue;
+        mutable std::recursive_mutex valueLock;
     };
 
     class UnitManualSetValue : public ManualSetValue<Unit*>
