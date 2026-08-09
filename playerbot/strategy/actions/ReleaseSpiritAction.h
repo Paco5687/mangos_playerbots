@@ -103,11 +103,14 @@ namespace ai
             if (ai->GetGroupMaster() == bot)
                 return true;
 
+            // Bot-led parties too: releasing inside an instance respawns at the
+            // outside graveyard and the ghost-run back through the portal is the
+            // most fragile step of an all-bot dungeon run. Keep the corpse.
+            if (ai->GetGroupMaster()->GetMapId() == bot->GetMapId() && (bot->GetMap()->IsRaid() || bot->GetMap()->IsDungeon()))
+                return false;
+
             if (!ai->HasActivePlayerMaster())
                 return true;
-
-            if (ai->HasActivePlayerMaster() && ai->GetGroupMaster()->GetMapId() == bot->GetMapId() && (bot->GetMap()->IsRaid() || bot->GetMap()->IsDungeon()))
-                return false;
 
             if(sServerFacade.UnitIsDead(ai->GetGroupMaster()))
                 return true;

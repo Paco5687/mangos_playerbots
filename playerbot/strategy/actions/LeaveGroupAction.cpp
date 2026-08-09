@@ -99,6 +99,11 @@ namespace ai
             }
         }
 
+        // A slow all-bot dungeon run can stall XP for 15+ minutes; disbanding
+        // the party mid-instance strands everyone. Groups hold inside.
+        if (bot->GetMap() && bot->GetMap()->IsDungeon())
+            return false;
+
         if (abs(int32(groupMaster->GetLevel() - bot->GetLevel())) > 4)
             return true;
 

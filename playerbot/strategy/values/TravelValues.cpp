@@ -369,7 +369,7 @@ bool ShouldTravelNamedValue::Calculate()
 
         return true;
     }
-    else if (name == "guild meeting")
+    else if (name == "guild meeting" || name == "guild dungeon")
     {
         if (!bot->GetGuildId())
             return false;
@@ -382,13 +382,19 @@ bool ShouldTravelNamedValue::Calculate()
         if (motd.empty()) 
             return false;
 
-        // Parse guild MOTD for the meeting time.
-        // Meeting: <location> <start time> <end time>
-        auto pos = motd.find("Meeting:");
+        // Parse guild MOTD for the scheduled window.
+        // Meeting: <location> <start> <end>  — converge on a place
+        // Dungeon: <target> <start> <end>    — grouped run at a boss/instance
+        const std::string keyword = (name == "guild dungeon") ? "Dungeon:" : "Meeting:";
+        auto pos = motd.find(keyword);
         if (pos == std::string::npos)
             return false;
 
-        std::string body = motd.substr(pos + 8);
+        // A dungeon call is for formed parties only; solo bots keep questing.
+        if (name == "guild dungeon" && (!bot->GetGroup() || bot->GetGroup()->GetMembersCount() < 3))
+            return false;
+
+        std::string body = motd.substr(pos + keyword.size());
         std::vector<std::string> tokens;
         { std::istringstream iss(body); std::string t; while (iss >> t) tokens.push_back(t); }
         if (tokens.size() < 3)

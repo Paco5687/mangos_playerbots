@@ -832,10 +832,11 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
             }
         );
     }
-    else if (travelName == "guild meeting")
+    else if (travelName == "guild meeting" || travelName == "guild dungeon")
     {
-        // Parse guild MOTD for the meeting time.
-        // Meeting: <location> <start time> <end time>
+        // Parse guild MOTD for the scheduled window (see ShouldTravelNamedValue).
+        const bool dungeonCall = (travelName == "guild dungeon");
+        const std::string keyword = dungeonCall ? "Dungeon:" : "Meeting:";
         std::string meetingLocation;
         if (bot->GetGuildId())
         {
@@ -843,10 +844,10 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
             if (guild)
             {
                 std::string motd = guild->GetMOTD();
-                auto pos = motd.find("Meeting:");
+                auto pos = motd.find(keyword);
                 if (pos != std::string::npos)
                 {
-                    std::string body = motd.substr(pos + 8);
+                    std::string body = motd.substr(pos + keyword.size());
                     body.erase(body.begin(), std::find_if(body.begin(), body.end(), [](unsigned char ch) { return !std::isspace(ch); }));
                     std::vector<std::string> tokens;
                     { std::istringstream iss(body); std::string t; while (iss >> t) tokens.push_back(t); }
@@ -868,10 +869,10 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
             return false;
         }
 
-        *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async, [travelInfo = PlayerTravelInfo(bot), center, meetingLocation]()
+        *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async(std::launch::async, [travelInfo = PlayerTravelInfo(bot), center, meetingLocation, dungeonCall]()
             {
                 PartitionedTravelList list;
-                for (auto& destination : ChooseTravelTargetAction::FindDestination(travelInfo, meetingLocation, true, false, false, false, false, false))
+                for (auto& destination : ChooseTravelTargetAction::FindDestination(travelInfo, meetingLocation, true, false, false, false, dungeonCall, false))
                 {
                     std::list<uint8> chancesToGoFar = { 10,50,90 };
                     WorldPosition* point = destination->GetNextPoint(center, chancesToGoFar);

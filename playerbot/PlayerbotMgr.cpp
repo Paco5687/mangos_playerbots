@@ -71,6 +71,7 @@ PlayerbotHolder::PlayerbotHolder() : PlayerbotAIBase()
     m_botCommandHandlers["random"] = &PlayerbotHolder::HandleBotRandom;
 
     m_botCommandHandlers["always"] = &PlayerbotHolder::HandleBotAlways;
+    m_botCommandHandlers["group"] = &PlayerbotHolder::HandleBotGroup;
     m_botCommandHandlers["debug"] = &PlayerbotHolder::HandleBotDebug;
     m_botCommandHandlers["c"] = &PlayerbotHolder::HandleBotC;
     m_botCommandHandlers["w"] = &PlayerbotHolder::HandleConsoleWhisper;
@@ -1229,6 +1230,30 @@ std::list<std::string> PlayerbotHolder::HandleTweak(Player* master, const std::s
         sPlayerbotAIConfig.tweakValue = 0;
     messages.push_back("Set tweakvalue to " + std::to_string(sPlayerbotAIConfig.tweakValue));
     return messages;
+}
+
+
+std::string PlayerbotHolder::HandleBotGroup(Player* bot, Player* master, const std::string param)
+{
+    // .rndbot group <who> <leaderName> — put bot(s) into the named leader's
+    // party, using JoinGroupAction's atomic invite+self-accept (no proximity,
+    // level or GrouperType gate). Bot must be in world (always-online bots are).
+    std::string leaderName = param;
+    if (leaderName.empty())
+        return "usage: group <leaderName>";
+
+    if (bot && bot->GetPlayerbotAI())
+    {
+        Player* leader = sObjectAccessor.FindPlayerByName(leaderName.c_str());
+        if (!leader)
+            return "group: leader " + leaderName + " is not online";
+        if (leader == bot)
+            return "group: " + std::string(bot->GetName()) + " leads";
+        bot->GetPlayerbotAI()->DoSpecificAction("join", Event("create group", "", leader), true);
+        return std::string(bot->GetName()) + " -> party of " + leaderName;
+    }
+
+    return "group: bot not in world";
 }
 
 std::string PlayerbotHolder::HandleBotAlways(Player* bot, Player* master, const std::string param)

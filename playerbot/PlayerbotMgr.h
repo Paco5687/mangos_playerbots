@@ -102,6 +102,7 @@ private:
 #endif
 
     std::string HandleBotAlways(Player* bot, Player* master, const std::string param);
+    std::string HandleBotGroup(Player* bot, Player* master, const std::string param);
     std::string HandleBotDebug(Player* bot, Player* master, const std::string param);
     std::string HandleBotC(Player* bot, Player* master, const std::string param);
     std::string HandleConsoleWhisper(Player* bot, Player* master, const std::string param);
