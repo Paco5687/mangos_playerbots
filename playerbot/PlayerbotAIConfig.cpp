@@ -664,6 +664,20 @@ bool PlayerbotAIConfig::Initialize()
     llmContextLength = config.GetIntDefault("AiPlayerbot.LLMContextLength", 4096);
     llmGenerationTimeout = config.GetIntDefault("AiPlayerbot.LLMGenerationTimeout", 600);
     llmMaxSimultaniousGenerations = config.GetIntDefault("AiPlayerbot.LLMMaxSimultaniousGenerations", 100);
+
+    // ---- NPC ambient dialogue (issue #48) ----
+    // Kill switch, off by default: this path must be opted into.
+    npcDialogueEnabled = config.GetBoolDefault("AiPlayerbot.NpcDialogueEnabled", false);
+    // Far shorter than the 25y say broadcast -- the player must be standing AT
+    // the NPC, not merely in the same square.
+    npcDialogueRange = config.GetFloatDefault("AiPlayerbot.NpcDialogueRange", 4.0f);
+    npcDialogueCooldown = config.GetIntDefault("AiPlayerbot.NpcDialogueCooldown", 45);
+    // Cap on NPC-held generation slots so bot chat never fully starves.
+    npcDialogueMaxConcurrent = config.GetIntDefault("AiPlayerbot.NpcDialogueMaxConcurrent", 1);
+    npcDialogueLinesFile = config.GetStringDefault("AiPlayerbot.NpcDialogueLinesFile", "");
+    npcDialoguePrompt = config.GetStringDefault("AiPlayerbot.NpcDialoguePrompt",
+        "You are a resident of Azeroth in the year 2008, speaking to a traveler. "
+        "Stay in character. Never mention being an AI or a game.");
         
     
     llmPrePrompt = config.GetStringDefault("AiPlayerbot.LLMPrePrompt", "You are a roleplaying character in World of Warcraft: <expansion name>. Your name is <bot name>. The <other type> <other name> is speaking to you <channel name> and is an <other gender> <other race> <other class> of level <other level>. You are level <bot level> and play as a <bot gender> <bot race> <bot class> that is currently in <bot subzone> <bot zone>. Answer as a roleplaying character. Limit responses to 100 characters.");

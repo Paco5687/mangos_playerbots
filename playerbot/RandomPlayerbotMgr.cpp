@@ -2,6 +2,7 @@
 
 #include "playerbot/playerbot.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/NpcDialogue.h"
 #include "playerbot/PlayerbotFactory.h"
 #include "strategy/values/LastMovementValue.h"
 #include "Accounts/AccountMgr.h"
@@ -645,6 +646,12 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 elapsed, bool minimal)
     sMemoryMonitor.Print();
     sMemoryMonitor.LogCount(sConfig.GetStringDefault("LogsDir") + "/" + "memory.csv");
 #endif
+
+    // Deliver any finished NPC dialogue replies (issue #48). World thread,
+    // non-blocking future poll, no-op when nothing is pending. Deliberately
+    // above the randomBotAutologin gate: NPC speech is independent of whether
+    // random bots are enabled.
+    sNpcDialogue.Update();
 
     if (!sPlayerbotAIConfig.randomBotAutologin || !sPlayerbotAIConfig.enabled)
         return;

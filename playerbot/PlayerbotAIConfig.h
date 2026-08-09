@@ -403,6 +403,12 @@ public:
     ParsedUrl llmEndPointUrl;
     std::set<uint32> llmBlockedReplyChannels;
     std::string llmChatLogFile; // JSONL conversation log (empty = off)
+
+    // NPC ambient dialogue (issue #48) — townsfolk answer a nearby player
+    bool npcDialogueEnabled;
+    float npcDialogueRange;
+    uint32 npcDialogueCooldown, npcDialogueMaxConcurrent;
+    std::string npcDialogueLinesFile, npcDialoguePrompt;
     //LM END
 
     uint32 EatDrinkMinDistance = 5;
