@@ -987,7 +987,15 @@ void RandomPlayerbotMgr::LoginFreeBots()
                     sRandomPlayerbotMgr.SetValue(botGuid, "test", 0);
                 }
 
-                if (!IsRandomBot(bot) && GetPlayerBot(guid)) //Place bot in player manager.
+                // Always-online alt bots stay autonomous in this manager even
+                // while their owner plays another character on the account.
+                // Reparenting them into the owner's PlayerbotMgr gave them a
+                // real-player master, which disables rpg/quest/travel — the
+                // bot froze whenever its owner was online, and orphaned
+                // entirely if the owner's session vanished uncleanly.
+                bool alwaysOnlineAlt = BotAlwaysOnline(sRandomPlayerbotMgr.GetValue(botGuid, "always")) == BotAlwaysOnline::ACTIVE;
+
+                if (!IsRandomBot(bot) && GetPlayerBot(guid) && !alwaysOnlineAlt) //Place bot in player manager.
                 {
                     for (auto& [mGuid, master] : players)
                     {
@@ -1006,9 +1014,13 @@ void RandomPlayerbotMgr::LoginFreeBots()
                 if (master)
                     bot->TeleportTo(WorldPosition(master));
 
-                BotAlwaysOnline always = BotAlwaysOnline(sRandomPlayerbotMgr.GetValue(botGuid, "always"));
-                if (always != BotAlwaysOnline::ACTIVE)
+                // Never drop a still-logged-in bot from the free list: it
+                // keeps its session but loses IS_ALWAYS_ACTIVE and all
+                // supervision (previously chars toggled in via config were
+                // silently abandoned here on the pass after login).
+                if (!alwaysOnlineAlt)
                 {
+                    LogoutPlayerBot(guid);
                     botsToRemove.push_back({accountId, botGuid});
                 }
             }
