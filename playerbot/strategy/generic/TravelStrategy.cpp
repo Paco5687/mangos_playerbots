@@ -93,7 +93,10 @@ void TravelStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
         {"val::not::travel target active","refresh travel target", 6.7f},                                     // 90%
         {"val::not::travel target active","choose group travel target", 6.65f},                               // 50%
         {"val::should travel named::trainer trade","request named travel target::trainer trade", 6.51f},      // 25%
-        {"val::has strategy::rpg quest", "request quest travel target", 6.3f}                                 // 95%
+        // Quests outrank gathering/bosses: quest rewards are the gear ladder at
+        // leveling pace, and the request cascade falls through to gathering
+        // whenever the quest well is dry — so gathering still happens, second.
+        {"val::has strategy::rpg quest", "request quest travel target", 6.55f}                                // 95%
     };
 
     for (auto& [trigger, action, relevance] : StringActions)
