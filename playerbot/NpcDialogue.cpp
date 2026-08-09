@@ -350,6 +350,11 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
 
 void NpcDialogue::Update()
 {
+    // Lazy one-time load on the first world tick: config is parsed and the
+    // world DB is up by then, and no other init hook exists in the module.
+    if (!m_loaded)
+        Load();
+
     if (!m_enabled || m_pending.empty())
         return;
 
