@@ -71,7 +71,7 @@ PlayerbotHolder::PlayerbotHolder() : PlayerbotAIBase()
     m_botCommandHandlers["random"] = &PlayerbotHolder::HandleBotRandom;
 
     m_botCommandHandlers["always"] = &PlayerbotHolder::HandleBotAlways;
-    m_botCommandHandlers["group"] = &PlayerbotHolder::HandleBotGroup;
+    m_botCommandHandlers["party"] = &PlayerbotHolder::HandleBotGroup;  // "group" is shadowed by the holder-level HandleGroup
     m_botCommandHandlers["debug"] = &PlayerbotHolder::HandleBotDebug;
     m_botCommandHandlers["c"] = &PlayerbotHolder::HandleBotC;
     m_botCommandHandlers["w"] = &PlayerbotHolder::HandleConsoleWhisper;
