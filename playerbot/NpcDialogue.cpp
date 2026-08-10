@@ -38,7 +38,7 @@ void NpcDialogue::Load()
     // services/knowledge_packs.is_eligible().
     auto result = WorldDatabase.Query(
         "SELECT ct.entry FROM creature_template ct "
-        "WHERE ct.GossipMenuId != 0 "
+        "WHERE ct.NpcFlags != 0 "   // any job: gossip, vendor, trainer, innkeeper...
         "AND (SELECT COUNT(*) FROM creature WHERE id = ct.entry) = 1");
     if (result)
     {
