@@ -94,6 +94,12 @@ class NpcDialogue
         bool OnCooldown(ObjectGuid guid, uint32 now) const;
         void SetCooldown(ObjectGuid guid, uint32 now);
 
+        // An NPC that has just replied to a player holds a short conversation
+        // window with THAT player: their follow-ups bypass the cooldown and go
+        // to the model instead of barking again. Strangers still hit cooldown.
+        bool IsEngagedWith(ObjectGuid creature, ObjectGuid player, uint32 now) const;
+        void SetEngaged(ObjectGuid creature, ObjectGuid player, uint32 now);
+
         std::string PickLine(uint32 entry, const std::string& kind) const;
         std::string BuildPrompt(Creature* creature, Player* player,
                                 const std::string& msg) const;
@@ -104,6 +110,8 @@ class NpcDialogue
         std::unordered_set<uint32> m_eligible;          // creature_template.entry
         std::unordered_map<uint32, NpcLines> m_lines;   // entry -> exported material
         std::unordered_map<uint64, uint32> m_cooldown;  // creature guid -> expiry
+        // creature guid -> (player guid, window expiry)
+        std::unordered_map<uint64, std::pair<uint64, uint32>> m_engaged;
         std::vector<Pending> m_pending;                 // in-flight generations
 };
 

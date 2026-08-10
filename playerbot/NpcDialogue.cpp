@@ -160,6 +160,30 @@ void NpcDialogue::SetCooldown(ObjectGuid guid, uint32 now)
     }
 }
 
+// A reply opens a 90-second conversation window with that one player; each
+// further reply refreshes it. Within the window the player's follow-ups skip
+// the cooldown and are treated as questions for the model.
+static const uint32 NPC_DIALOGUE_ENGAGE_S = 90;
+
+bool NpcDialogue::IsEngagedWith(ObjectGuid creature, ObjectGuid player, uint32 now) const
+{
+    auto it = m_engaged.find(creature.GetRawValue());
+    return it != m_engaged.end()
+        && it->second.first == player.GetRawValue()
+        && it->second.second > now;
+}
+
+void NpcDialogue::SetEngaged(ObjectGuid creature, ObjectGuid player, uint32 now)
+{
+    m_engaged[creature.GetRawValue()] = { player.GetRawValue(), now + NPC_DIALOGUE_ENGAGE_S };
+
+    if (m_engaged.size() > 4096)
+    {
+        for (auto it = m_engaged.begin(); it != m_engaged.end(); )
+            it = (it->second.second <= now) ? m_engaged.erase(it) : ++it;
+    }
+}
+
 Creature* NpcDialogue::FindNearestListener(Player* player, float range) const
 {
     std::list<Creature*> nearby;
@@ -283,23 +307,35 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
         return;
 
     uint32 now = uint32(time(nullptr));
-    if (OnCooldown(listener->GetObjectGuid(), now))
+
+    // A player the NPC just replied to is mid-conversation: no cooldown, and
+    // everything they say goes to the model. Everyone else waits their turn.
+    bool engaged = IsEngagedWith(listener->GetObjectGuid(), player->GetObjectGuid(), now);
+    if (!engaged && OnCooldown(listener->GetObjectGuid(), now))
         return;
 
     const std::string intent = Classify(msg);
 
     // Tier 1 -- free, instant, grounded. Greetings and passing remarks never
-    // reach the model.
-    if (intent != "question")
+    // reach the model. A bark also opens the conversation window, so the
+    // follow-up ("how are you?") escalates to a real reply.
+    if (!engaged && intent != "question")
     {
         std::string line = PickLine(listener->GetEntry(), intent);
         if (!line.empty())
         {
             Speak(listener, line);
             SetCooldown(listener->GetObjectGuid(), now);
+            SetEngaged(listener->GetObjectGuid(), player->GetObjectGuid(), now);
         }
         return;
     }
+
+    // Already composing a reply for this creature: let it finish rather than
+    // stacking a second generation (the player spoke again while it thought).
+    for (const auto& pend : m_pending)
+        if (pend.creature == listener->GetObjectGuid())
+            return;
 
     // Tier 2 -- a real question. Bounded: NPCs may hold only part of the
     // generation budget so bot conversation never starves.
@@ -310,11 +346,13 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
         {
             Speak(listener, line);          // bark beats standing mute
             SetCooldown(listener->GetObjectGuid(), now);
+            SetEngaged(listener->GetObjectGuid(), player->GetObjectGuid(), now);
         }
         return;
     }
 
     SetCooldown(listener->GetObjectGuid(), now);
+    SetEngaged(listener->GetObjectGuid(), player->GetObjectGuid(), now);
 
     std::string json = BuildPrompt(listener, player, msg);
     int timeout = int(sPlayerbotAIConfig.llmGenerationTimeout);
@@ -392,7 +430,12 @@ void NpcDialogue::Update()
                 if (Creature* c = map->GetCreature(it->creature))
                 {
                     if (c->IsAlive())
+                    {
                         Speak(c, text);
+                        // the window runs from when the NPC actually answered,
+                        // not from when the question was asked
+                        SetEngaged(it->creature, it->listener, uint32(time(nullptr)));
+                    }
                 }
             }
         }
