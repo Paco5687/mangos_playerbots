@@ -1102,15 +1102,23 @@ bool TravelPath::UpcommingSpecialMovement(WorldPosition startPos, float maxDist,
     //Teleport to end of transport.
     if (sPlayerbotAIConfig.transportTeleportType == 2 && nextP->type == PathNodeType::NODE_TRANSPORT)
     {
-        for (auto p = startP + 1; p != fullPath.end(); p++) //Move along the transport path to the end of the boat ride. 
+        for (auto p = startP + 1; p != fullPath.end(); p++) //Move along the transport path to the end of the boat ride.
         {
             if (p->type != PathNodeType::NODE_TRANSPORT)
             {
                 cutTo(*prevP, false); //PrevP = where transport will stop, startP = dock where we want to walk to.
                 return true;
             }
+
+            // Without this advance, prevP still points at the node BEHIND the
+            // bot, so the cut sent them a few yards back onto the near dock -
+            // path "done", replan, repeat. With TransportTeleportType=2 being
+            // the default, every bot whose route crossed water walked to the
+            // harbour and stood there for good. The sibling loop above
+            // (transportTeleportType < 2) always had this line.
+            prevP = p;
         }
-    }    
+    }
 
     return false;
 }
