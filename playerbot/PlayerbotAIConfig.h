@@ -399,6 +399,12 @@ public:
     //LM BEGIN
     std::string llmApiEndpoint, llmApiKey, llmApiJson, llmPrePrompt, llmPreRpgPrompt, llmPrompt, llmPostPrompt, llmResponseStartPattern, llmResponseEndPattern, llmResponseDeletePattern, llmResponseSplitPattern;
     uint32 llmEnabled, llmContextLength, llmBotToBotChatChance, llmGenerationTimeout, llmMaxSimultaniousGenerations, llmRpgAIChatChance;
+    // Chance (0-100) that a bot answers a REAL player on a channel many bots
+    // can hear — guild, party, raid, say. Whispers are personal and always
+    // answered. Without this every bot in earshot replies at once: one guild
+    // greeting sent a dozen bots at two generation slots and most came back
+    // empty. A room answers with a voice or two, not a chorus.
+    uint32 llmRealPlayerReplyChance;
     bool llmGlobalContext;
     ParsedUrl llmEndPointUrl;
     std::set<uint32> llmBlockedReplyChannels;

@@ -590,7 +590,16 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
         {
             std::string playerName = player->GetName();
 
-            if (player != bot && (player->isRealPlayer() || (sPlayerbotAIConfig.llmBotToBotChatChance && urand(0, 99) < sPlayerbotAIConfig.llmBotToBotChatChance)))
+            // A whisper is meant for you alone, so it is always answered.
+            // On a channel a whole guild can hear, only some voices speak up
+            // -- otherwise every bot in earshot answers the same greeting and
+            // they starve each other for generation slots.
+            bool speaksUp = true;
+            if (player->isRealPlayer() && chatChannelSource != ChatChannelSource::SRC_WHISPER
+                && sPlayerbotAIConfig.llmRealPlayerReplyChance < 100)
+                speaksUp = urand(0, 99) < sPlayerbotAIConfig.llmRealPlayerReplyChance;
+
+            if (player != bot && ((player->isRealPlayer() && speaksUp) || (sPlayerbotAIConfig.llmBotToBotChatChance && urand(0, 99) < sPlayerbotAIConfig.llmBotToBotChatChance)))
             {
                 std::map<std::string, std::string> placeholders;
 
