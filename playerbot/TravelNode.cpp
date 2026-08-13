@@ -112,11 +112,25 @@ float TravelNodePath::getCost(Unit* unit, uint32 cGold)
     Player* bot = dynamic_cast<Player*>(unit);
     if (bot)
     {
-        if (path.size() && path.back().getMapId() == 530 && bot->GetLevel() < 58) //Outland
-            return -1;
-
-        if (path.size() && path.back().getMapId() == 571 && bot->GetLevel() < 68) //Northrend
-            return -1;
+        if (path.size())
+        {
+            // Gate expansion continents by the AREA's level, not the map id.
+            // In TBC, map 530 is not only Outland: Azuremyst, Eversong and
+            // Quel'Danas all live on it at far corners. The map-id test made
+            // every path into the draenei and blood elf starting isles
+            // unroutable below 58, so bots with quests there piled up at the
+            // docks with no legal route home. Area levels tell them apart:
+            // Azuremyst ~10, Hellfire 58+, Quel'Danas 70. The lookup is only
+            // paid on expansion-map endpoints to keep this hot path cheap.
+            uint32 endMap = path.back().getMapId();
+            if (endMap == 530 || endMap == 571)
+            {
+                uint32 gate = endMap == 530 ? 58 : 68;
+                int32 endAreaLevel = path.back().getAreaLevel();
+                if (endAreaLevel >= (int32)gate && bot->GetLevel() < gate)
+                    return -1;
+            }
+        }
 
         //Check if we can use this area trigger.
         if (getPathType() == TravelNodePathType::areaTrigger && pathObject)
@@ -200,6 +214,16 @@ float TravelNodePath::getCost(Unit* unit, uint32 cGold)
 
             if (mobAnnoyance > 0)
                 modifier += 0.1 * mobAnnoyance;     //For each level the whole path takes 10% longer.
+            if (mobAnnoyance > 5)
+            {
+                // Beyond +15 over the bot the linear penalty stops matching
+                // reality: a level 8 does not cross croc-country 70% slower,
+                // they die there, corpse-run, and die again - Grimloch did it
+                // three times in one Menethil march. Price it like the hours
+                // it actually costs so any survivable detour wins, while a
+                // route with no alternative at all stays traversable.
+                modifier += 1.0 * (mobAnnoyance - 5);
+            }
             if (factionAnnoyance > 0)
                 modifier += 0.3 * factionAnnoyance; //For each level the whole path takes 30% longer.
         }

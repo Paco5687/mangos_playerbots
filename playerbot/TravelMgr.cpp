@@ -2624,11 +2624,12 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
     bool canFightElite = info.GetBoolValue("can fight elite");
     uint32 botLevel = info.GetLevel();
 
-    if (position.getMapId() == 530 && info.GetLevel() < 58) //Outland
-        return false;
-
-    if (position.getMapId() == 571 && info.GetLevel() < 68) //Northrend
-        return false;
+    // No map-id shortcut here: the areaLevel check below gates expansion
+    // zones correctly on its own, and the shortcut wrongly banned the TBC
+    // starting zones that share map 530 (Azuremyst, Eversong) for every bot
+    // under 58 - low-level draenei could not even SELECT a destination in
+    // their own homeland. Hellfire (58+) and Quel'Danas (70) still reject
+    // low levels below, through the same test as everywhere else.
 
     if (info.GetBoolValue("can fight boss"))
         botLevel += 5;
