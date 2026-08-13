@@ -79,6 +79,10 @@ class NpcDialogue
             ObjectGuid creature;
             ObjectGuid listener;
             uint32 mapId;
+            // carried to delivery so the exchange can be logged when the
+            // reply lands - the Player* must not be held across the wait
+            std::string playerName;
+            std::string heard;
             std::future<std::string> reply;
         };
 

@@ -2,6 +2,7 @@
 
 #include "PlayerbotAIConfig.h"
 #include "PlayerbotLLMInterface.h"
+#include "strategy/actions/SayAction.h"
 
 #include "Database/DatabaseEnv.h"
 #include "Entities/Creature.h"
@@ -327,6 +328,11 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
             Speak(listener, line);
             SetCooldown(listener->GetObjectGuid(), now);
             SetEngaged(listener->GetObjectGuid(), player->GetObjectGuid(), now);
+            // These conversations used to exist only on the player's screen.
+            // Same file and shape as guild-bot chat; channel "npc" so the
+            // distiller and future per-NPC memory can filter them cleanly.
+            ChatReplyAction::LogLlmConversation(listener->GetName(), player->GetName(),
+                "npc", listener->GetZoneId(), msg, line);
         }
         return;
     }
@@ -347,6 +353,8 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
             Speak(listener, line);          // bark beats standing mute
             SetCooldown(listener->GetObjectGuid(), now);
             SetEngaged(listener->GetObjectGuid(), player->GetObjectGuid(), now);
+            ChatReplyAction::LogLlmConversation(listener->GetName(), player->GetName(),
+                "npc", listener->GetZoneId(), msg, line);
         }
         return;
     }
@@ -369,6 +377,8 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
     p.creature = listener->GetObjectGuid();
     p.listener = player->GetObjectGuid();
     p.mapId = listener->GetMapId();
+    p.playerName = player->GetName();
+    p.heard = msg;
     // Off the world thread. Generate() is static and self-throttling.
     p.reply = std::async(std::launch::async, [json, timeout, maxGen, startPattern, endPattern, deletePattern, splitPattern]()
     {
@@ -435,6 +445,8 @@ void NpcDialogue::Update()
                         // the window runs from when the NPC actually answered,
                         // not from when the question was asked
                         SetEngaged(it->creature, it->listener, uint32(time(nullptr)));
+                        ChatReplyAction::LogLlmConversation(c->GetName(), it->playerName,
+                            "npc", c->GetZoneId(), it->heard, text);
                     }
                 }
             }
