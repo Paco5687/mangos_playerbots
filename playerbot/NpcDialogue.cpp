@@ -248,6 +248,28 @@ std::string NpcDialogue::BuildPrompt(Creature* creature, Player* player,
     pre << "If the answer is not in what you know, say plainly that you do not "
            "know and suggest who might. Answer in one or two short sentences.";
 
+    // Remembered regulars (issue #58 step 3): the worldservice folds the
+    // conversation log into per-NPC, per-player memory files; reading one
+    // here means the innkeeper greets a third-visit player like the regular
+    // they are. A tiny file read on the world thread, and only when the
+    // pair has actually spoken before.
+    {
+        std::string npcSafe, playerSafe;
+        for (char ch : std::string(creature->GetName()))
+            npcSafe += (isalnum((unsigned char)ch) ? (char)tolower((unsigned char)ch) : '_');
+        for (char ch : std::string(player->GetName()))
+            playerSafe += (isalnum((unsigned char)ch) ? (char)tolower((unsigned char)ch) : '_');
+        std::ifstream mem("/srv/mangos/worldservice/npc_memory/" + npcSafe + "__" + playerSafe + ".txt");
+        if (mem.is_open())
+        {
+            std::string line, memory;
+            while (std::getline(mem, line) && memory.size() < 500)
+                memory += line + " ";
+            if (!memory.empty())
+                pre << "What you remember of this visitor: " << memory;
+        }
+    }
+
     std::string prompt = player->GetName();
     prompt += " says: ";
     prompt += msg;
