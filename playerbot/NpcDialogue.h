@@ -24,6 +24,7 @@
 #include "Common.h"
 #include "Entities/ObjectGuid.h"
 
+#include <deque>
 #include <future>
 #include <map>
 #include <string>
@@ -109,6 +110,13 @@ class NpcDialogue
                                 const std::string& msg) const;
         void Speak(Creature* creature, const std::string& text) const;
 
+        // Short-term conversational memory: the last few exchanges between
+        // this creature and this player, fed back into the prompt so a
+        // six-question chat is a conversation instead of six cold starts.
+        // World thread only (BuildPrompt and delivery both run there).
+        void RecordExchange(ObjectGuid creature, ObjectGuid player,
+                            const std::string& heard, const std::string& said);
+
         bool m_enabled;
         bool m_loaded;
         std::unordered_set<uint32> m_eligible;          // creature_template.entry
@@ -117,6 +125,9 @@ class NpcDialogue
         // creature guid -> (player guid, window expiry)
         std::unordered_map<uint64, std::pair<uint64, uint32>> m_engaged;
         std::vector<Pending> m_pending;                 // in-flight generations
+        // (creature guid, player guid) -> recent (heard, said) exchanges
+        std::map<std::pair<uint64, uint64>,
+                 std::deque<std::pair<std::string, std::string>>> m_history;
 };
 
 #define sNpcDialogue NpcDialogue::instance()

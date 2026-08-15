@@ -243,10 +243,62 @@ std::string NpcDialogue::BuildPrompt(Creature* creature, Player* player,
     if (creature->GetSubName() && *creature->GetSubName())
         pre << ", " << creature->GetSubName();
     pre << ". ";
+
+    // Voice anchoring: the exported barks are the character's own words, and
+    // a couple of them in the prompt keep the model speaking in that voice
+    // instead of generic-assistant. Without this, every NPC sounds like the
+    // same helpful concierge no matter who they are.
+    if (it != m_lines.end())
+    {
+        std::ostringstream voice;
+        uint32 shown = 0;
+        for (const auto& v : { &it->second.greet, &it->second.idle })
+            for (const auto& line : *v)
+            {
+                if (shown >= 3 || voice.str().size() > 400)
+                    break;
+                voice << "\"" << line << "\" ";
+                ++shown;
+            }
+        if (shown)
+            pre << "How you talk (stay in this voice): " << voice.str();
+    }
+
     if (!knowledge.empty())
         pre << "What you know: " << knowledge << " ";
-    pre << "If the answer is not in what you know, say plainly that you do not "
-           "know and suggest who might. Answer in one or two short sentences.";
+
+    // Local color: per-zone lore distilled from the era corpus by the
+    // worldservice. Absent file means the NPC gets by on its blurb alone.
+    {
+        std::ifstream lore("/srv/mangos/worldservice/npc_lore/"
+                           + std::to_string(creature->GetZoneId()) + ".txt");
+        if (lore.is_open())
+        {
+            std::string line, text;
+            while (std::getline(lore, line) && text.size() < 600)
+                text += line + " ";
+            if (!text.empty())
+                pre << "About this place: " << text;
+        }
+    }
+
+    // The conversation so far, so follow-ups build instead of cold-starting.
+    {
+        auto hit = m_history.find({ creature->GetObjectGuid().GetRawValue(),
+                                    player->GetObjectGuid().GetRawValue() });
+        if (hit != m_history.end() && !hit->second.empty())
+        {
+            pre << "Your conversation so far: ";
+            for (const auto& ex : hit->second)
+                pre << player->GetName() << " said \"" << ex.first
+                    << "\" and you answered \"" << ex.second << "\". ";
+        }
+    }
+
+    pre << "Answer the question actually asked, in one or two short sentences, "
+           "with your own opinions and manner. If you truly do not know, admit "
+           "it in your own words - never invent facts, and name at most one "
+           "person who might know instead of listing several.";
 
     // Remembered regulars (issue #58 step 3): the worldservice folds the
     // conversation log into per-NPC, per-player memory files; reading one
@@ -289,6 +341,19 @@ std::string NpcDialogue::BuildPrompt(Creature* creature, Player* player,
     fill("<context>", "");
     fill("<post prompt>", "");
     return json;
+}
+
+void NpcDialogue::RecordExchange(ObjectGuid creature, ObjectGuid player,
+                                 const std::string& heard, const std::string& said)
+{
+    // Bounded two ways: three exchanges per pair, and a crude full reset if
+    // the map ever grows past any plausible number of live conversations.
+    if (m_history.size() > 256)
+        m_history.clear();
+    auto& deque = m_history[{ creature.GetRawValue(), player.GetRawValue() }];
+    deque.emplace_back(heard, said);
+    while (deque.size() > 3)
+        deque.pop_front();
 }
 
 void NpcDialogue::Speak(Creature* creature, const std::string& text) const
@@ -355,6 +420,7 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
             // distiller and future per-NPC memory can filter them cleanly.
             ChatReplyAction::LogLlmConversation(listener->GetName(), player->GetName(),
                 "npc", listener->GetZoneId(), msg, line);
+            RecordExchange(listener->GetObjectGuid(), player->GetObjectGuid(), msg, line);
         }
         return;
     }
@@ -377,6 +443,7 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
             SetEngaged(listener->GetObjectGuid(), player->GetObjectGuid(), now);
             ChatReplyAction::LogLlmConversation(listener->GetName(), player->GetName(),
                 "npc", listener->GetZoneId(), msg, line);
+            RecordExchange(listener->GetObjectGuid(), player->GetObjectGuid(), msg, line);
         }
         return;
     }
@@ -469,6 +536,7 @@ void NpcDialogue::Update()
                         SetEngaged(it->creature, it->listener, uint32(time(nullptr)));
                         ChatReplyAction::LogLlmConversation(c->GetName(), it->playerName,
                             "npc", c->GetZoneId(), it->heard, text);
+                        RecordExchange(it->creature, it->listener, it->heard, text);
                     }
                 }
             }
