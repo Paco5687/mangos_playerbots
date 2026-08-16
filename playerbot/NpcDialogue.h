@@ -84,6 +84,7 @@ class NpcDialogue
             // reply lands - the Player* must not be held across the wait
             std::string playerName;
             std::string heard;
+            bool storyteller = false;   // reply is the tale bridge, not the LLM
             std::future<std::string> reply;
         };
 
@@ -106,6 +107,8 @@ class NpcDialogue
         void SetEngaged(ObjectGuid creature, ObjectGuid player, uint32 now);
 
         std::string PickLine(uint32 entry, const std::string& kind) const;
+        void DispatchStoryteller(Creature* creature, Player* player,
+                                 const std::string& msg);
         std::string BuildPrompt(Creature* creature, Player* player,
                                 const std::string& msg) const;
         void Speak(Creature* creature, const std::string& text) const;

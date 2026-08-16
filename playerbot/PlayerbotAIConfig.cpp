@@ -675,6 +675,10 @@ bool PlayerbotAIConfig::Initialize()
     // Cap on NPC-held generation slots so bot chat never fully starves.
     npcDialogueMaxConcurrent = config.GetIntDefault("AiPlayerbot.NpcDialogueMaxConcurrent", 1);
     npcDialogueLinesFile = config.GetStringDefault("AiPlayerbot.NpcDialogueLinesFile", "");
+    storytellerEntry = config.GetIntDefault("AiPlayerbot.StorytellerEntry", 90000);
+    storytellerUrl = config.GetStringDefault("AiPlayerbot.StorytellerUrl",
+        "http://127.0.0.1:8000/panel/api/zork/play");
+    storytellerToken = config.GetStringDefault("AiPlayerbot.StorytellerToken", "");
     npcDialoguePrompt = config.GetStringDefault("AiPlayerbot.NpcDialoguePrompt",
         "You are a resident of Azeroth in the year 2008, speaking to a traveler. "
         "Stay in character. Never mention being an AI or a game.");

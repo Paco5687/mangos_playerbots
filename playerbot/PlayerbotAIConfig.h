@@ -415,6 +415,9 @@ public:
     float npcDialogueRange;
     uint32 npcDialogueCooldown, npcDialogueMaxConcurrent;
     std::string npcDialogueLinesFile, npcDialoguePrompt;
+    // The Storyteller (issue #59): one creature routed to the tale bridge
+    uint32 storytellerEntry;
+    std::string storytellerUrl, storytellerToken;
     //LM END
 
     uint32 EatDrinkMinDistance = 5;

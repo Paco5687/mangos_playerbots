@@ -226,6 +226,92 @@ std::string NpcDialogue::PickLine(uint32 entry, const std::string& kind) const
     return pool[urand(0, uint32(pool.size() - 1))];
 }
 
+void NpcDialogue::DispatchStoryteller(Creature* creature, Player* player,
+                                      const std::string& msg)
+{
+    std::string body = std::string("{\"player\": \"")
+        + PlayerbotLLMInterface::SanitizeForJson(player->GetName())
+        + "\", \"text\": \"" + PlayerbotLLMInterface::SanitizeForJson(msg) + "\"}";
+    Pending p;
+    p.creature = creature->GetObjectGuid();
+    p.listener = player->GetObjectGuid();
+    p.mapId = creature->GetMapId();
+    p.playerName = player->GetName();
+    p.heard = msg;
+    p.storyteller = true;
+    std::string url = sPlayerbotAIConfig.storytellerUrl;
+    std::string tok = sPlayerbotAIConfig.storytellerToken;
+    p.reply = std::async(std::launch::async, [body, url, tok]()
+    {
+        return PlayerbotLLMInterface::Post(url, body, tok, 10);
+    });
+    m_pending.push_back(std::move(p));
+}
+
+// Just enough JSON reading for the bridge's fixed reply shape:
+// {"lines": ["...", ...], "outcome": "...", "devoured": bool}
+static std::vector<std::string> ExtractJsonStrings(const std::string& json,
+                                                   const std::string& arrayKey)
+{
+    std::vector<std::string> out;
+    size_t at = json.find("\"" + arrayKey + "\"");
+    if (at == std::string::npos)
+        return out;
+    at = json.find('[', at);
+    size_t end = json.find(']', at);
+    if (at == std::string::npos || end == std::string::npos)
+        return out;
+    size_t i = at;
+    while (i < end)
+    {
+        size_t q1 = json.find('"', i + 1);
+        if (q1 == std::string::npos || q1 > end)
+            break;
+        std::string piece;
+        size_t j = q1 + 1;
+        while (j < end)
+        {
+            char ch = json[j];
+            if (ch == '\\' && j + 1 < end)
+            {
+                char nx = json[j + 1];
+                piece += (nx == 'n') ? ' ' : nx;
+                j += 2;
+                continue;
+            }
+            if (ch == '"')
+                break;
+            piece += ch;
+            ++j;
+        }
+        if (!piece.empty())
+            out.push_back(piece);
+        i = j;
+    }
+    return out;
+}
+
+static std::string ExtractJsonValue(const std::string& json, const std::string& key)
+{
+    size_t at = json.find("\"" + key + "\"");
+    if (at == std::string::npos)
+        return "";
+    at = json.find(':', at);
+    if (at == std::string::npos)
+        return "";
+    size_t q1 = json.find('"', at);
+    size_t comma = json.find_first_of(",}", at);
+    if (q1 != std::string::npos && (comma == std::string::npos || q1 < comma))
+    {
+        size_t q2 = json.find('"', q1 + 1);
+        return q2 == std::string::npos ? "" : json.substr(q1 + 1, q2 - q1 - 1);
+    }
+    std::string raw = json.substr(at + 1, (comma == std::string::npos ? json.size() : comma) - at - 1);
+    raw.erase(0, raw.find_first_not_of(" 	"));
+    raw.erase(raw.find_last_not_of(" 	") + 1);
+    return raw;
+}
+
 std::string NpcDialogue::BuildPrompt(Creature* creature, Player* player,
                                      const std::string& msg) const
 {
@@ -402,6 +488,21 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
     if (!engaged && OnCooldown(listener->GetObjectGuid(), now))
         return;
 
+    // The Storyteller (issue #59): one naga at the end of the world whose
+    // conversation IS a text adventure. Everything he hears goes to the tale
+    // bridge; the engage window keeps a session playable past the cooldown.
+    if (listener->GetEntry() == sPlayerbotAIConfig.storytellerEntry
+        && !sPlayerbotAIConfig.storytellerToken.empty())
+    {
+        for (const auto& pend : m_pending)
+            if (pend.creature == listener->GetObjectGuid())
+                return;                  // let the current passage finish
+        DispatchStoryteller(listener, player, msg);
+        SetCooldown(listener->GetObjectGuid(), now);
+        SetEngaged(listener->GetObjectGuid(), player->GetObjectGuid(), now);
+        return;
+    }
+
     const std::string intent = Classify(msg);
 
     // Tier 1 -- free, instant, grounded. Greetings and passing remarks never
@@ -433,7 +534,11 @@ void NpcDialogue::OnPlayerChat(Player* player, const std::string& msg, uint32 /*
 
     // Tier 2 -- a real question. Bounded: NPCs may hold only part of the
     // generation budget so bot conversation never starves.
-    if (m_pending.size() >= sPlayerbotAIConfig.npcDialogueMaxConcurrent)
+    size_t llmPending = 0;
+    for (const auto& pend : m_pending)
+        if (!pend.storyteller)
+            ++llmPending;
+    if (llmPending >= sPlayerbotAIConfig.npcDialogueMaxConcurrent)
     {
         std::string line = PickLine(listener->GetEntry(), "deflect");
         if (!line.empty())
@@ -528,7 +633,33 @@ void NpcDialogue::Update()
             {
                 if (Creature* c = map->GetCreature(it->creature))
                 {
-                    if (c->IsAlive())
+                    if (c->IsAlive() && it->storyteller)
+                    {
+                        // The tale bridge replied: speak the passage, and if
+                        // the visitor got themselves killed in the story, the
+                        // teller takes it personally. Faction 14 with
+                        // TEMPFACTION_RESTORE_RESPAWN is self-resetting: he
+                        // kills you, evades home, and will tell it again.
+                        std::vector<std::string> lines = ExtractJsonStrings(text, "lines");
+                        for (const std::string& line : lines)
+                            c->MonsterSay(line.c_str(), LANG_UNIVERSAL);
+                        SetEngaged(it->creature, it->listener, uint32(time(nullptr)));
+                        if (ExtractJsonValue(text, "outcome") == "died")
+                        {
+                            bool devoured = ExtractJsonValue(text, "devoured") == "true";
+                            std::string gloat = devoured
+                                ? "You let it EAT you. In MY tale. Unforgivable, landwalker."
+                                : "The tale was in my keeping, and you SPOILED the telling!";
+                            c->MonsterYell(gloat.c_str(), LANG_UNIVERSAL);
+                            c->SetFactionTemporary(14, TEMPFACTION_RESTORE_RESPAWN);
+                            if (Player* victim = c->GetMap()->GetPlayer(it->listener))
+                                if (c->AI())
+                                    c->AI()->AttackStart(victim);
+                        }
+                        // outcome "idle" arrives with no lines: silence, and
+                        // his next hearing falls to ordinary dialogue anyway.
+                    }
+                    else if (c->IsAlive())
                     {
                         Speak(c, text);
                         // the window runs from when the NPC actually answered,

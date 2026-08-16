@@ -796,3 +796,76 @@ void PlayerbotLLMInterface::LimitContext(std::string& context, int currentLength
         }
     }
 }
+
+std::string PlayerbotLLMInterface::Post(const std::string& url, const std::string& body,
+                                        const std::string& apiToken, int timeOutSeconds)
+{
+    // http://host:port/path only - local bridges. HTTP/1.0 keeps the reply
+    // un-chunked and the connection closes when the body ends.
+    std::string rest = url;
+    if (rest.rfind("http://", 0) == 0)
+        rest = rest.substr(7);
+    else
+        return "";
+    size_t slash = rest.find('/');
+    std::string hostport = (slash == std::string::npos) ? rest : rest.substr(0, slash);
+    std::string path = (slash == std::string::npos) ? "/" : rest.substr(slash);
+    size_t colon = hostport.find(':');
+    std::string host = (colon == std::string::npos) ? hostport : hostport.substr(0, colon);
+    std::string port = (colon == std::string::npos) ? "80" : hostport.substr(colon + 1);
+
+    struct addrinfo hints = {}, *res = nullptr;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(host.c_str(), port.c_str(), &hints, &res) != 0 || !res)
+        return "";
+    int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (sock < 0) { freeaddrinfo(res); return ""; }
+#ifndef _WIN32
+    struct timeval tv = { timeOutSeconds, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof(tv));
+#endif
+    if (connect(sock, res->ai_addr, res->ai_addrlen) < 0)
+    {
+        freeaddrinfo(res);
+#ifdef _WIN32
+        closesocket(sock);
+#else
+        close(sock);
+#endif
+        return "";
+    }
+    freeaddrinfo(res);
+
+    std::ostringstream req;
+    req << "POST " << path << " HTTP/1.0\r\n"
+        << "Host: " << host << "\r\n"
+        << "Content-Type: application/json\r\n";
+    if (!apiToken.empty())
+        req << "X-API-Token: " << apiToken << "\r\n";
+    req << "Content-Length: " << body.size() << "\r\n\r\n" << body;
+    std::string data = req.str();
+    if (send(sock, data.c_str(), data.size(), 0) < 0)
+    {
+#ifdef _WIN32
+        closesocket(sock);
+#else
+        close(sock);
+#endif
+        return "";
+    }
+
+    std::string response;
+    char buf[4096];
+    int n;
+    while ((n = recv(sock, buf, sizeof(buf), 0)) > 0)
+        response.append(buf, n);
+#ifdef _WIN32
+    closesocket(sock);
+#else
+    close(sock);
+#endif
+    size_t hdrEnd = response.find("\r\n\r\n");
+    return hdrEnd == std::string::npos ? "" : response.substr(hdrEnd + 4);
+}
