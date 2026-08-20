@@ -677,6 +677,7 @@ bool PlayerbotAIConfig::Initialize()
     npcDialogueLinesFile = config.GetStringDefault("AiPlayerbot.NpcDialogueLinesFile", "");
     allowCrossContinentTravel = config.GetBoolDefault(
         "AiPlayerbot.AllowCrossContinentTravel", true);
+    directivesEnabled = config.GetBoolDefault("AiPlayerbot.DirectivesEnabled", false);
     storytellerEntry = config.GetIntDefault("AiPlayerbot.StorytellerEntry", 90000);
     storytellerUrl = config.GetStringDefault("AiPlayerbot.StorytellerUrl",
         "http://127.0.0.1:8000/panel/api/zork/play");

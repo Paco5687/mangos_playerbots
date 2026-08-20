@@ -1,5 +1,6 @@
 #include "PlayerbotMgr.h"
 #include "playerbot/playerbot.h"
+#include "playerbot/PlayerbotDirectives.h"
 #include <stdarg.h>
 #include <iomanip>
 
@@ -1131,6 +1132,12 @@ void PlayerbotAI::HandleCommands()
 
 void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
 {
+    // Durable directives (epic #61): the body re-reads its standing orders
+    // from the DB on a slow heartbeat and corrects only on drift. Survives
+    // relogs, restarts and factory strategy resets by construction.
+    if (sPlayerbotAIConfig.directivesEnabled)
+        sPlayerbotDirectives.Sync(this);
+
     if (bot->IsBeingTeleported() || !bot->IsInWorld())
         return;
 

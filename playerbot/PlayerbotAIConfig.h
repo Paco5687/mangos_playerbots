@@ -417,6 +417,7 @@ public:
     std::string npcDialogueLinesFile, npcDialoguePrompt;
     // The Storyteller (issue #59): one creature routed to the tale bridge
     bool allowCrossContinentTravel;
+    bool directivesEnabled;
     uint32 storytellerEntry;
     std::string storytellerUrl, storytellerToken;
     //LM END
