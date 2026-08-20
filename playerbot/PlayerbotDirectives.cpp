@@ -85,11 +85,13 @@ void PlayerbotDirectives::Apply(PlayerbotAI* ai, Row const& row)
         // drift-only correction: equal sets mean a journey in progress is
         // never reset - this is what the console re-send could not do
         auto* focusValue = ai->GetAiObjectContext()->GetValue<focusQuestTravelList>("focus travel target");
+        bool corrected = false;
         if (focusValue->Get() != want)
         {
             focusValue->Set(want);
             if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
                 target->SetExpireIn(1000);
+            corrected = true;
         }
 
         // the strategies the focus machinery needs, healed if a relog's
@@ -99,7 +101,21 @@ void PlayerbotDirectives::Apply(PlayerbotAI* ai, Row const& row)
             if (!ai->HasStrategy(required, BotState::BOT_STATE_NON_COMBAT))
                 delta << (delta.tellp() > 0 ? "," : "") << "+" << required;
         if (delta.tellp() > 0)
+        {
             ai->ChangeStrategy(delta.str(), BotState::BOT_STATE_NON_COMBAT);
+            corrected = true;
+        }
+        if (corrected)
+        {
+            sLog.outString("Directives: %s applied %s (%s)%s",
+                           ai->GetBot()->GetName(), row.type.c_str(),
+                           row.params.c_str(),
+                           delta.tellp() > 0 ? " with strategy heal" : "");
+            CharacterDatabase.PExecute(
+                "UPDATE `playerbot_directives` SET `status` = 'active', "
+                "`progress` = 'focus=%zu', `updated_at` = UNIX_TIMESTAMP() "
+                "WHERE `guid` = '%u'", want.size(), ai->GetBot()->GetGUIDLow());
+        }
         return;
     }
 
@@ -117,6 +133,15 @@ void PlayerbotDirectives::Apply(PlayerbotAI* ai, Row const& row)
         auto* focusValue = ai->GetAiObjectContext()->GetValue<focusQuestTravelList>("focus travel target");
         if (!focusValue->Get().empty())
             focusValue->Set({});
+        if (delta.tellp() > 0)
+        {
+            sLog.outString("Directives: %s holding court (%s stripped)",
+                           ai->GetBot()->GetName(), delta.str().c_str());
+            CharacterDatabase.PExecute(
+                "UPDATE `playerbot_directives` SET `status` = 'active', "
+                "`updated_at` = UNIX_TIMESTAMP() WHERE `guid` = '%u'",
+                ai->GetBot()->GetGUIDLow());
+        }
         return;
     }
     // unknown type: ignore quietly - forward compatibility with later phases
