@@ -1,6 +1,7 @@
 #include "Config/Config.h"
 
 #include "playerbot/playerbot.h"
+#include "playerbot/PlayerbotDirectives.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/NpcDialogue.h"
 #include "playerbot/PlayerbotFactory.h"
@@ -652,6 +653,7 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 elapsed, bool minimal)
     // above the randomBotAutologin gate: NPC speech is independent of whether
     // random bots are enabled.
     sNpcDialogue.Update();
+    sPlayerbotDirectives.UpdateWorld();
 
     if (!sPlayerbotAIConfig.randomBotAutologin || !sPlayerbotAIConfig.enabled)
         return;

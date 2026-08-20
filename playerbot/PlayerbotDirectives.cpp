@@ -34,19 +34,32 @@ std::set<uint32> PlayerbotDirectives::ParseIds(std::string const& params)
     return out;
 }
 
-PlayerbotDirectives::Row PlayerbotDirectives::Fetch(uint32 guid)
+void PlayerbotDirectives::UpdateWorld()
 {
-    Row row;
+    if (!sPlayerbotAIConfig.directivesEnabled)
+        return;
+    time_t now = time(nullptr);
+    if (now < m_nextLoad)
+        return;
+    m_nextLoad = now + 15;
+
+    std::map<uint32, Row> fresh;
     auto result = CharacterDatabase.PQuery(
-        "SELECT `type`, `params` FROM `playerbot_directives` WHERE `guid` = '%u'", guid);
+        "SELECT `guid`, `type`, `params` FROM `playerbot_directives`");
     if (result)
     {
-        Field* fields = result->Fetch();
-        row.type = fields[0].GetCppString();
-        row.params = fields[1].GetCppString();
-        row.exists = true;
+        do
+        {
+            Field* fields = result->Fetch();
+            Row row;
+            row.type = fields[1].GetCppString();
+            row.params = fields[2].GetCppString();
+            row.exists = true;
+            fresh[fields[0].GetUInt32()] = row;
+        } while (result->NextRow());
     }
-    return row;
+    std::lock_guard<std::mutex> lock(m_lock);
+    m_cache.swap(fresh);
 }
 
 void PlayerbotDirectives::Sync(PlayerbotAI* ai)
@@ -60,15 +73,20 @@ void PlayerbotDirectives::Sync(PlayerbotAI* ai)
 
     uint32 guid = bot->GetGUIDLow();
     time_t now = time(nullptr);
+    Row row;
     {
         std::lock_guard<std::mutex> lock(m_lock);
         time_t& next = m_nextCheck[guid];
         if (now < next)
             return;
         next = now + DIRECTIVE_REFRESH_S;
+        auto it = m_cache.find(guid);
+        if (it == m_cache.end())
+            return;
+        row = it->second;
     }
 
-    Apply(ai, Fetch(guid));
+    Apply(ai, row);
 }
 
 void PlayerbotDirectives::Apply(PlayerbotAI* ai, Row const& row)

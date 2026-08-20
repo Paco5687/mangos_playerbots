@@ -44,9 +44,16 @@ class PlayerbotDirectives
             return s_instance;
         }
 
-        // Called from PlayerbotAI::UpdateAIInternal. Cheap no-op until the
-        // per-bot refresh interval elapses; then one PK SELECT and, only if
-        // live state drifted from the directive, the minimal correction.
+        // World thread (RandomPlayerbotMgr::UpdateAIInternal): refreshes the
+        // in-memory directive cache with ONE query every ~15s. Bots' Sync
+        // calls run on map-update threads, where CharacterDatabase.PQuery
+        // silently returns nothing - the first deployment applied exactly
+        // one directive (at boot, on the world thread) and then went deaf.
+        void UpdateWorld();
+
+        // Map threads, from PlayerbotAI::UpdateAIInternal. Cheap no-op until
+        // the per-bot interval elapses; then a cache read and, only if live
+        // state drifted from the directive, the minimal correction.
         void Sync(PlayerbotAI* ai);
 
     private:
@@ -59,12 +66,13 @@ class PlayerbotDirectives
             bool exists = false;
         };
 
-        Row Fetch(uint32 guid);
         void Apply(PlayerbotAI* ai, Row const& row);
         static std::set<uint32> ParseIds(std::string const& params);
 
         std::mutex m_lock;
-        std::map<uint32, time_t> m_nextCheck;   // guid -> next DB read
+        std::map<uint32, time_t> m_nextCheck;   // guid -> next cache read
+        std::map<uint32, Row> m_cache;          // world-thread refreshed
+        time_t m_nextLoad = 0;
 };
 
 #define sPlayerbotDirectives PlayerbotDirectives::instance()
