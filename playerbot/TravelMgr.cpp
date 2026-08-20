@@ -2651,6 +2651,15 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
     if (!areaLevel || botLevel < areaLevel) //Skip points that are in a area that is too high level.
         return false;
 
+    // The sea is closed (epic #61): crossings strand riders under physical
+    // boarding and pier-ping-pong them under teleport mode, so until the
+    // crossing rework lands a bot may not SELECT a destination on another
+    // continent. Filtering at selection kills every dock lure at the source
+    // - free roam, quest focus and rpg all pass through here.
+    if (!sPlayerbotAIConfig.allowCrossContinentTravel
+        && position.getMapId() != info.GetPosition().getMapId())
+        return false;
+
     return true;
 }
 

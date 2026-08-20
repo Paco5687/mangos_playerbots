@@ -675,6 +675,8 @@ bool PlayerbotAIConfig::Initialize()
     // Cap on NPC-held generation slots so bot chat never fully starves.
     npcDialogueMaxConcurrent = config.GetIntDefault("AiPlayerbot.NpcDialogueMaxConcurrent", 1);
     npcDialogueLinesFile = config.GetStringDefault("AiPlayerbot.NpcDialogueLinesFile", "");
+    allowCrossContinentTravel = config.GetBoolDefault(
+        "AiPlayerbot.AllowCrossContinentTravel", true);
     storytellerEntry = config.GetIntDefault("AiPlayerbot.StorytellerEntry", 90000);
     storytellerUrl = config.GetStringDefault("AiPlayerbot.StorytellerUrl",
         "http://127.0.0.1:8000/panel/api/zork/play");

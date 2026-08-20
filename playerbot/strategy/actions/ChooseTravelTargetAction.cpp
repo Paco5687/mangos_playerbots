@@ -1489,7 +1489,9 @@ bool FocusTravelTargetAction::Execute(Event& event)
 
             for (auto& qualifier : qualifiers)
                 if (Qualified::isValidNumberString(qualifier))
-                    questIds.insert(stoi(text));
+                    questIds.insert(stoi(qualifier));   // was stoi(text): a
+                    // comma list inserted only its first id, so multi-quest
+                    // focus silently behaved as single-quest focus
         }
     }
 
